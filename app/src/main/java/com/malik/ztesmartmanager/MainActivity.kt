@@ -1,13 +1,8 @@
 package com.malik.ztesmartmanager
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -43,14 +38,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.malik.ztesmartmanager.core.model.CarrierCell
 import com.malik.ztesmartmanager.core.model.CellRole
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
@@ -68,9 +61,7 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                 MaterialTheme(colorScheme = AppColors) {
                     Surface(modifier = Modifier.fillMaxSize()) {
-                        LocalNetworkPermissionGate {
-                            ZteManagerApp()
-                        }
+                        ZteManagerApp()
                     }
                 }
             }
@@ -85,46 +76,6 @@ private val AppColors = lightColorScheme(
     background = Color(0xFFF8F8F5),
     surfaceVariant = Color(0xFFECEFEA)
 )
-
-@Composable
-private fun LocalNetworkPermissionGate(content: @Composable () -> Unit) {
-    if (Build.VERSION.SDK_INT < 37) {
-        content()
-        return
-    }
-
-    val context = LocalContext.current
-    var granted by remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_LOCAL_NETWORK) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { result ->
-        granted = result
-    }
-
-    LaunchedEffect(Unit) {
-        if (!granted) launcher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK)
-    }
-
-    if (granted) {
-        content()
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("يحتاج التطبيق إذن الشبكة المحلية", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            Text("يُستخدم الإذن فقط للتواصل مباشرة مع راوتر ZTE داخل شبكتك المحلية.")
-            Spacer(Modifier.height(20.dp))
-            Button(onClick = { launcher.launch(Manifest.permission.ACCESS_LOCAL_NETWORK) }) {
-                Text("منح الإذن")
-            }
-        }
-    }
-}
 
 @Composable
 private fun ZteManagerApp() {
@@ -255,7 +206,10 @@ private fun LoginScreen(
         Spacer(Modifier.height(12.dp))
         Text(status, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(8.dp))
-        Text("كلمة المرور تُستخدم محليًا للمصادقة مع الراوتر ولا تُرسل إلى أي خدمة خارجية.", style = MaterialTheme.typography.bodySmall)
+        Text(
+            "كلمة المرور تُستخدم محليًا للمصادقة مع الراوتر ولا تُرسل إلى أي خدمة خارجية.",
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -274,7 +228,11 @@ private fun DashboardScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column {
                     Text("ZTE Smart Manager", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -308,7 +266,10 @@ private fun DashboardScreen(
 
 @Composable
 private fun SignalCard(snapshot: RouterSnapshot) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(20.dp)) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(20.dp)
+    ) {
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
             Text("الإشارة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(12.dp))
@@ -338,14 +299,20 @@ private fun NetworkCard(snapshot: RouterSnapshot) {
 
 @Composable
 private fun PlacementCard(reading: PlacementReading) {
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(22.dp)) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(22.dp)
+    ) {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
             Text("مساعد أفضل مكان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
             Text("${reading.score.total} / 100", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
             Text(reading.score.label)
             Spacer(Modifier.height(12.dp))
-            LinearProgressIndicator(progress = { reading.score.total / 100f }, modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(
+                progress = { reading.score.total / 100f },
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(14.dp))
             Text(placementGuidanceText(reading.guidance), fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(10.dp))
@@ -394,10 +361,14 @@ private fun MetricRow(label: String, value: Double?, unit: String) {
 
 @Composable
 private fun InfoRow(label: String, value: String) {
-    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, fontWeight = FontWeight.Medium)
     }
 }
 
-private fun formatNumber(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
+private fun formatNumber(value: Double): String =
+    if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
