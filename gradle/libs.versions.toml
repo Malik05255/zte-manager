@@ -1,9 +1,9 @@
 [versions]
 agp = "9.4.0"
-kotlin = "2.4.20"
+kotlin = "2.3.21"
 core = "1.19.0"
 activity = "1.13.0"
-composeBom = "2026.04.01"
+composeBom = "2026.08.00"
 coroutines = "1.11.0"
 
 [libraries]
@@ -18,5 +18,4 @@ kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutine
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
