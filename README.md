@@ -32,6 +32,29 @@ HTTP Client
 ZTE Router
 ```
 
+## دقة تفسير الشبكة
+
+في عائلة ZTE القديمة التي تستخدم `goform` لا يكفي البحث عن كلمة `5G` داخل `network_type`:
+
+- `ENDC` / `EN-DC`: اتصال **5G NSA فعلي** مع مرساة LTE.
+- `LTE-NSA`: الموقع/الجهاز يدعم NSA لكن حامل NR ليس نشطًا في تلك اللحظة، والبيانات تمر عبر مرساة LTE.
+- `SA`: اتصال **5G Standalone**.
+- `LTE`: اتصال 4G بدون حامل NR نشط.
+
+التطبيق يجمع `network_type` مع حقول NR/CA الفعلية ولا يعتمد على مؤشر واحد فقط. كما أن بعض حقول ZTE مثل `lte_pci` و`nr5g_pci` و`cell_id` قد تُرجع بصيغة hexadecimal في واجهات goform القديمة، لذلك تتم معالجتها وفق صيغة الـFirmware بدل افتراض decimal دائمًا.
+
+## مراجع التوافق والبروتوكول
+
+المشروع يُكتب من الصفر، لكن يتم تدقيق سلوك ZTE وحقول القراءة مقابل مشاريع مفتوحة المصدر وخبرات عملية، أهمها:
+
+- `tpoechtrager/ZTE-Web-Script` — مرجع قوي لتفسير ENDC/LTE-NSA وقراءة LTE/NR/CA في أجهزة ZTE المختلفة.
+- `Kajkac/ZTE-MC-Home-assistant-repo` — مجموعة واسعة من حقول telemetry لأجهزة MC801/MC888/MC889 وغيرها.
+- `PlayFaster/ha-zte-router-5g-monitor` — discovery واسع لأسماء الحقول واختلافات Firmware بين أجهزة ZTE.
+- `nicjac/python-zte-mc801a` — مرجع مستقل لمصادقة MC801A وبعض أوامر goform.
+- ZManager v1.1.1 — يستخدم فقط كمرجع interoperability لفهم سلوك بعض أجهزة MC801A/MC801A1؛ لا يتم نسخ كوده أو واجهته أو أصوله.
+
+أي سلوك غير مؤكد يبقى داخل Profile خاص بالموديل/Firmware ولا يتم تعميمه على بقية الأجهزة حتى يتم التحقق منه.
+
 ## المرحلة الأولى
 
 1. تأسيس Android/Kotlin/Compose.
