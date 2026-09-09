@@ -13,7 +13,9 @@ object ZteSnapshotParser {
         val rawNetworkType = firstNonBlank(raw, "network_type", "current_network", "nRat")
         val radioState = classifyRadioState(rawNetworkType)
 
-        val lteBand = normalizeLteBand(firstNonBlank(raw, "wan_active_band", "lte_ca_pcell_band", "lte_band"))
+        // Prefer the explicit CA PCell field when firmware exposes it. wan_active_band can
+        // occasionally contain an aggregate/display value, so it is a weaker fallback.
+        val lteBand = normalizeLteBand(firstNonBlank(raw, "lte_ca_pcell_band", "wan_active_band", "lte_band"))
         val ltePci = parseZtePci(raw["lte_pci"], 503)
         val lteArfcn = parseSmartInt(firstNonBlank(raw, "lte_ca_pcell_arfcn", "lte_ca_pcell_freq", "wan_active_channel"))
         val lteRsrp = firstSignal(raw, -160.0, -35.0, "lte_rsrp")
@@ -31,7 +33,7 @@ object ZteSnapshotParser {
             )
         } else null
 
-        val secondaryCells = buildList {
+        val parsedSecondaryCells = buildList {
             addAll(parseSecondaryCells(firstNonBlank(raw, "lte_multi_ca_scell_info", "lte_ca_scell_info")))
 
             if (isEmpty()) {
@@ -46,7 +48,7 @@ object ZteSnapshotParser {
                         CarrierCell(
                             role = CellRole.SECONDARY,
                             band = singleBand,
-                            pci = parseFlexiblePci(raw["lte_ca_scell_pci"], 503),
+                            pci = parseZtePci(raw["lte_ca_scell_pci"], 503),
                             arfcn = parseSmartInt(firstNonBlank(raw, "lte_ca_scell_arfcn", "lte_ca_scell_freq")),
                             bandwidthMhz = parseNumber(raw["lte_ca_scell_bandwidth"])
                         )
@@ -54,6 +56,14 @@ object ZteSnapshotParser {
                 }
             }
         }.distinctBy { Triple(it.band, it.pci, it.arfcn) }
+
+        // Some ZTE firmware variants repeat the PCell inside lte_multi_ca_scell_info.
+        // Never show that duplicate as an SCell. We compare carrier identity, not just
+        // the band, so real intra-band CA (for example B3+B3 on different EARFCNs)
+        // remains visible.
+        val secondaryCells = parsedSecondaryCells.filterNot { secondary ->
+            primaryCell?.let { primary -> sameLteCarrier(primary, secondary) } == true
+        }
 
         val rawNrBand = normalizeNrBand(
             firstNonBlank(
@@ -131,6 +141,8 @@ object ZteSnapshotParser {
         raw["_zte_nr_structural_evidence"] = structuralNrEvidence.toString()
         raw["_zte_ca_active"] = caActive.toString()
         raw["_zte_raw_network_type"] = rawNetworkType.orEmpty()
+        raw["_zte_secondary_cells_raw_count"] = parsedSecondaryCells.size.toString()
+        raw["_zte_secondary_cells_count"] = secondaryCells.size.toString()
 
         val mcc = firstNonBlank(raw, "rmcc", "mdm_mcc").orEmpty().trim()
         val mnc = firstNonBlank(raw, "rmnc", "mdm_mnc").orEmpty().trim()
@@ -200,7 +212,7 @@ object ZteSnapshotParser {
                 CarrierCell(
                     role = CellRole.SECONDARY,
                     band = band,
-                    pci = parseFlexiblePci(fields.getOrNull(1), 503),
+                    pci = parseZtePci(fields.getOrNull(1), 503),
                     arfcn = parseSmartInt(fields.getOrNull(4)),
                     bandwidthMhz = parseNumber(fields.getOrNull(5))
                 )
@@ -227,6 +239,20 @@ object ZteSnapshotParser {
                     bandwidthMhz = parseNumber(fields.getOrNull(5))
                 )
             }
+    }
+
+    private fun sameLteCarrier(primary: CarrierCell, secondary: CarrierCell): Boolean {
+        if (primary.band == null || secondary.band == null || primary.band != secondary.band) return false
+
+        val primaryArfcn = primary.arfcn
+        val secondaryArfcn = secondary.arfcn
+        if (primaryArfcn != null && secondaryArfcn != null) {
+            return primaryArfcn == secondaryArfcn
+        }
+
+        val primaryPci = primary.pci
+        val secondaryPci = secondary.pci
+        return primaryPci != null && secondaryPci != null && primaryPci == secondaryPci
     }
 
     private fun firstNonBlank(raw: Map<String, String>, vararg names: String): String? = names
