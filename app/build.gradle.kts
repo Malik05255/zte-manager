@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.malik.ztesmartmanager"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.malik.ztesmartmanager"
