@@ -70,15 +70,18 @@ object ZteSnapshotParser {
         val rawNrRsrp = firstSignal(raw, -170.0, -35.0, "Z5g_rsrp", "nr5g_rsrp", "5g_rx0_rsrp", "5g_rx1_rsrp")
         val rawNrSinr = firstSignal(raw, -30.0, 60.0, "Z5g_SINR", "Z5g_snr", "nr5g_sinr", "nr5g_snr")
 
-        val strongNrEvidence = rawNrBand != null &&
-            (rawNrArfcn != null || rawNrPci != null || rawNrCellId != null || rawNrRsrp != null || rawNrSinr != null)
+        // Some MC801A firmware leaves network_type at LTE/LTE-NSA while it still reports
+        // live NR measurements. ZManager itself shows the 5G block whenever NR-RSRP is live.
+        // Require multiple independent NR indicators so stale values do not create false 5G.
+        val liveNrSignalEvidence = rawNrRsrp != null &&
+            (rawNrBand != null || rawNrArfcn != null || rawNrPci != null || rawNrCellId != null)
+        val structuralNrEvidence = rawNrBand != null &&
+            ((rawNrArfcn != null && rawNrPci != null) || rawNrCellId != null)
+        val strongNrEvidence = liveNrSignalEvidence || structuralNrEvidence
 
-        // For legacy ZTE goform firmware, ENDC / EN-DC means the NR carrier is actually active.
-        // LTE-NSA means the site/router supports NSA but the NR carrier is not currently in use.
         val nrActive = when (radioState) {
             RadioState.NSA_ACTIVE, RadioState.SA_ACTIVE, RadioState.FIVE_G_ACTIVE -> true
-            RadioState.NSA_STANDBY, RadioState.LTE_ONLY -> false
-            RadioState.UNKNOWN -> strongNrEvidence
+            RadioState.NSA_STANDBY, RadioState.LTE_ONLY, RadioState.UNKNOWN -> strongNrEvidence
         }
 
         val nrBand = rawNrBand.takeIf { nrActive }
@@ -107,13 +110,15 @@ object ZteSnapshotParser {
             isCaActivated(raw["Lte_ca_status"]) ||
             isPositiveFlag(raw["lte_ca_scell_ca_activated"])
 
-        val ltePresent = primaryCell != null || lteRsrp != null || radioState == RadioState.LTE_ONLY || radioState == RadioState.NSA_ACTIVE || radioState == RadioState.NSA_STANDBY
+        val ltePresent = primaryCell != null || lteRsrp != null ||
+            radioState == RadioState.LTE_ONLY || radioState == RadioState.NSA_ACTIVE || radioState == RadioState.NSA_STANDBY
+
         val interpretedNetworkType = when (radioState) {
             RadioState.NSA_ACTIVE -> "5G NSA • ${rawNetworkType ?: "ENDC"}"
-            RadioState.NSA_STANDBY -> "LTE-NSA"
+            RadioState.NSA_STANDBY -> if (nrActive) "5G NSA + 4G • LTE-NSA" else "LTE-NSA"
             RadioState.SA_ACTIVE -> "5G SA"
             RadioState.FIVE_G_ACTIVE -> rawNetworkType ?: "5G"
-            RadioState.LTE_ONLY -> rawNetworkType ?: "LTE"
+            RadioState.LTE_ONLY -> if (nrActive) "5G NSA + 4G • LTE telemetry" else rawNetworkType ?: "LTE"
             RadioState.UNKNOWN -> when {
                 nrActive && ltePresent -> "5G + 4G"
                 nrActive -> "5G"
@@ -123,6 +128,8 @@ object ZteSnapshotParser {
 
         raw["_zte_interpreted_network_type"] = interpretedNetworkType.orEmpty()
         raw["_zte_nr_active"] = nrActive.toString()
+        raw["_zte_nr_live_signal_evidence"] = liveNrSignalEvidence.toString()
+        raw["_zte_nr_structural_evidence"] = structuralNrEvidence.toString()
         raw["_zte_ca_active"] = caActive.toString()
         raw["_zte_raw_network_type"] = rawNetworkType.orEmpty()
 
