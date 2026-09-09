@@ -3,7 +3,7 @@ agp = "9.4.0"
 kotlin = "2.3.21"
 core = "1.19.0"
 activity = "1.13.0"
-composeBom = "2026.08.00"
+composeBom = "2026.04.01"
 coroutines = "1.11.0"
 
 [libraries]
