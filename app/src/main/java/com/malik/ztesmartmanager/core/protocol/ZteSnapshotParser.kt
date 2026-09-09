@@ -70,11 +70,10 @@ object ZteSnapshotParser {
         val rawNrRsrp = firstSignal(raw, -170.0, -35.0, "Z5g_rsrp", "nr5g_rsrp", "5g_rx0_rsrp", "5g_rx1_rsrp")
         val rawNrSinr = firstSignal(raw, -30.0, 60.0, "Z5g_SINR", "Z5g_snr", "nr5g_sinr", "nr5g_snr")
 
-        // Some MC801A firmware leaves network_type at LTE/LTE-NSA while it still reports
-        // live NR measurements. ZManager itself shows the 5G block whenever NR-RSRP is live.
-        // Require multiple independent NR indicators so stale values do not create false 5G.
-        val liveNrSignalEvidence = rawNrRsrp != null &&
-            (rawNrBand != null || rawNrArfcn != null || rawNrPci != null || rawNrCellId != null)
+        // ZManager's MC801A UI treats a live NR-RSRP value as sufficient evidence that
+        // the 5G carrier is active. We apply the same principle, but first reject known
+        // bogus/sentinel values using firstSignal()'s valid radio range.
+        val liveNrSignalEvidence = rawNrRsrp != null
         val structuralNrEvidence = rawNrBand != null &&
             ((rawNrArfcn != null && rawNrPci != null) || rawNrCellId != null)
         val strongNrEvidence = liveNrSignalEvidence || structuralNrEvidence
