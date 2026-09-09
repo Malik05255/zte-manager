@@ -392,6 +392,11 @@ private fun DashboardScreen(
                 OutlinedButton(onClick = onDisconnect) { Text("فصل") }
             }
         }
+
+        snapshot?.let { data ->
+            item { CurrentConnectionCard(data) }
+        }
+
         if (operationMessage.isNotBlank()) item { StatusCard(operationMessage) }
         if (placementMode && placementReading != null) item { PlacementCard(placementReading) }
         item {
@@ -457,6 +462,97 @@ private fun DashboardScreen(
         }
     }
 }
+
+@Composable
+private fun CurrentConnectionCard(snapshot: RouterSnapshot) {
+    val primary = snapshot.cells.firstOrNull { it.role == CellRole.PRIMARY }
+    val secondary = snapshot.cells.filter { it.role == CellRole.SECONDARY }
+    val nrCells = snapshot.cells.filter { it.role == CellRole.NR }
+
+    val primaryBand = displayBand(primary?.band ?: snapshot.lteBand, "B")
+    val secondaryBands = secondary.mapNotNull { displayBand(it.band, "B") }.distinct()
+    val nrBands = buildList {
+        nrCells.mapNotNullTo(this) { displayBand(it.band, "N") }
+        displayBand(snapshot.nrBand, "N")?.let(::add)
+    }.distinct()
+
+    val lteBands = buildList {
+        primaryBand?.let(::add)
+        addAll(secondaryBands)
+        currentLteBands(snapshot).sorted().mapTo(this) { "B$it" }
+    }.distinct()
+
+    val allBands = (lteBands + nrBands).joinToString(" + ").ifBlank { "جاري قراءة التردد..." }
+    val mode = currentRadioMode(snapshot, lteBands, nrBands)
+    val caCount = lteBands.size.coerceAtLeast(if (snapshot.caActive) 2 else lteBands.size)
+    val lteAggregation = when {
+        lteBands.size > 1 -> "${lteBands.joinToString(" + ")} • ${lteBands.size}CA"
+        snapshot.caActive -> "نشط • CA"
+        lteBands.size == 1 -> "لا يوجد دمج • ${lteBands.first()}"
+        else -> "غير معروف"
+    }
+    val fiveG = when {
+        nrBands.isNotEmpty() -> nrBands.joinToString(" + ")
+        snapshot.nrRsrp != null || snapshot.nrSinr != null -> "نشط"
+        else -> "غير متصل"
+    }
+    val primaryCell = buildString {
+        append(primaryBand ?: "—")
+        val pci = primary?.pci ?: snapshot.pci
+        if (pci != null) append(" • PCI $pci")
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Text("الاتصال الآن", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            Text(mode, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.height(4.dp))
+            Text(allBands, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(14.dp))
+
+            InfoRow("دمج 4G", lteAggregation)
+            InfoRow("5G", fiveG)
+            InfoRow("الخلية الرئيسية", primaryCell)
+            if (secondaryBands.isNotEmpty()) {
+                InfoRow("خلايا الدمج", secondaryBands.joinToString(" + "))
+            } else if (snapshot.caActive && caCount >= 2) {
+                InfoRow("خلايا الدمج", "CA نشط — الراوتر لم يُرجع أسماء كل الـBands")
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "يعرض الترددات النشطة فعليًا الآن، وليس مجرد الترددات المسموح بها في الإعدادات.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun currentRadioMode(snapshot: RouterSnapshot, lteBands: List<String>, nrBands: List<String>): String {
+    val raw = snapshot.networkType.orEmpty().uppercase()
+    val hasNr = nrBands.isNotEmpty() || snapshot.nrRsrp != null || snapshot.nrSinr != null || "5G" in raw || "NR" in raw
+    val hasLte = lteBands.isNotEmpty() || snapshot.lteRsrp != null || "LTE" in raw
+    val explicitSa = ("SA" in raw && "NSA" !in raw)
+    val explicitNsa = "NSA" in raw || "ENDC" in raw || "EN-DC" in raw
+
+    return when {
+        hasNr && hasLte && (explicitNsa || !explicitSa) -> "5G NSA + 4G"
+        hasNr && explicitSa && !hasLte -> "5G SA"
+        hasNr && explicitSa -> "5G SA"
+        hasNr && hasLte -> "5G + 4G"
+        hasNr -> "5G"
+        hasLte && (snapshot.caActive || lteBands.size > 1) -> "4G+ • دمج ترددات"
+        hasLte -> "4G"
+        else -> snapshot.networkType?.takeIf { it.isNotBlank() } ?: "نوع الشبكة غير معروف"
+    }
+}
+
+private fun displayBand(value: String?, prefix: String): String? = extractBand(value)?.let { "$prefix$it" }
 
 @Composable
 private fun StatusCard(message: String) {
@@ -527,9 +623,9 @@ private fun SignalCard(snapshot: RouterSnapshot) {
 private fun NetworkCard(snapshot: RouterSnapshot) {
     Card(shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
-            Text("الشبكة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("تفاصيل الشبكة", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
-            InfoRow("النوع", snapshot.networkType ?: "—")
+            InfoRow("النوع الخام", snapshot.networkType ?: "—")
             InfoRow("4G", snapshot.lteBand ?: "—")
             InfoRow("5G", snapshot.nrBand ?: "—")
             InfoRow("PCI", snapshot.pci?.toString() ?: "—")
