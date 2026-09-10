@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import com.malik.ztesmartmanager.core.model.RouterSettingsBackup
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
+import com.malik.ztesmartmanager.core.presentation.RouterConnectionMessage
 import com.malik.ztesmartmanager.core.protocol.ZteRouterClient
 import com.malik.ztesmartmanager.core.smart.NetworkPerformance
 import com.malik.ztesmartmanager.core.smart.NetworkPerformanceProbe
@@ -29,6 +30,7 @@ import com.malik.ztesmartmanager.core.smart.PlacementReading
 import com.malik.ztesmartmanager.core.smart.SmartBandOptimizer
 import com.malik.ztesmartmanager.core.smart.SmartOptimizationReport
 import com.malik.ztesmartmanager.core.storage.RouterBackupStore
+import com.malik.ztesmartmanager.core.storage.SecureRouterCredentialStore
 import com.malik.ztesmartmanager.core.storage.TowerFingerprintStore
 import com.malik.ztesmartmanager.core.storage.TowerGuardStateStore
 import com.malik.ztesmartmanager.core.tower.NearbyCell
@@ -63,7 +65,7 @@ private const val FINAL_SMART_COOLDOWN_MS = 15 * 60 * 1000L
 @Composable
 private fun FinalManagerApp() {
     var routerAddress by rememberSaveable { mutableStateOf("192.168.0.1") }
-    var password by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var client by remember { mutableStateOf<ZteRouterClient?>(null) }
     var towerEngine by remember { mutableStateOf<TowerLockEngine?>(null) }
     var snapshot by remember { mutableStateOf<RouterSnapshot?>(null) }
@@ -102,8 +104,22 @@ private fun FinalManagerApp() {
     val backupStore = remember(context) { RouterBackupStore(context) }
     val fingerprintStore = remember(context) { TowerFingerprintStore(context) }
     val guardStateStore = remember(context) { TowerGuardStateStore(context) }
+    val credentialStore = remember(context) { SecureRouterCredentialStore(context) }
+    var rememberPassword by rememberSaveable { mutableStateOf(false) }
+    var credentialsLoaded by remember { mutableStateOf(false) }
     var latestSafetyBackup by remember { mutableStateOf<RouterSettingsBackup?>(null) }
     val scope = rememberCoroutineScope()
+
+    androidx.compose.runtime.LaunchedEffect(credentialStore) {
+        if (!credentialsLoaded) {
+            credentialStore.load()?.let { saved ->
+                routerAddress = saved.routerAddress
+                password = saved.password
+                rememberPassword = true
+            }
+            credentialsLoaded = true
+        }
+    }
 
     suspend fun captureSafetyBackup(
         connected: ZteRouterClient,
@@ -157,6 +173,14 @@ private fun FinalManagerApp() {
                 smartBaseline = monitorScorer.score(first).total
                 poorSamples = 0
 
+                if (rememberPassword) {
+                    if (!credentialStore.save(routerAddress, password)) {
+                        operationMessage = "تم الاتصال، لكن تعذر حفظ كلمة المرور بشكل آمن على هذا الجهاز"
+                    }
+                } else {
+                    credentialStore.clear()
+                }
+
                 val savedGuardState = guardStateStore.load(routerAddress)
                 val lockReadBack = if (savedGuardState != null) {
                     runCatching { newClient.readRaw(setOf("lte_pci_lock", "lte_earfcn_lock")) }.getOrNull()
@@ -205,7 +229,7 @@ private fun FinalManagerApp() {
                 towerTarget = null
                 towerGuardEnabled = false
                 towerGuardStatus = null
-                status = it.message ?: "تعذر الاتصال بالراوتر"
+                status = RouterConnectionMessage.from(it, routerAddress)
             }
             connectBusy = false
         }
@@ -264,7 +288,6 @@ private fun FinalManagerApp() {
                 return@launch
             }
 
-            // If the router was already unlocked, prove that its unlock path works before risking a lock.
             val removalVerified = if (backup.cellWasUnlocked) {
                 runCatching { connected.clearCellLock() }.getOrNull()?.verified == true
             } else true
@@ -365,11 +388,16 @@ private fun FinalManagerApp() {
 
     val connected = client
     if (connected == null) {
-        PremiumLoginScreen(
+        ZteRouterLoginScreen(
             routerAddress = routerAddress,
             onRouterAddressChange = { routerAddress = it },
             password = password,
             onPasswordChange = { password = it },
+            rememberPassword = rememberPassword,
+            onRememberPasswordChange = { checked ->
+                rememberPassword = checked
+                if (!checked) credentialStore.clear()
+            },
             status = status,
             busy = connectBusy,
             onConnect = ::connect
