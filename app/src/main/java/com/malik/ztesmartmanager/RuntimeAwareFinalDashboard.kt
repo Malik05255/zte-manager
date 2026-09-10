@@ -139,7 +139,7 @@ fun RuntimeAwareFinalDashboard(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
 
-    ArabicHaiDashboard(
+    ArabicHaiDashboardV2(
         snapshot = snapshot,
         capabilities = effectiveCapabilities,
         runtime = runtime,
