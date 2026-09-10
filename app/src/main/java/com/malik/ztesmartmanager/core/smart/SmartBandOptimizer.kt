@@ -36,8 +36,9 @@ data class SmartOptimizationReport(
 /**
  * Verified, bounded LTE optimizer.
  *
- * Design rules:
+ * Truth-first rules:
  * - configured bands are never treated as active carriers;
+ * - the original band mask must be read back exactly before any mutation is allowed;
  * - a candidate is eligible only after exact band-mask read-back;
  * - RF quality is derived from several post-settle samples, not one transient snapshot;
  * - CA is counted only when the parser has verified CA live and at least two LTE carriers exist;
@@ -56,10 +57,15 @@ class SmartBandOptimizer(
         val supported = client.profile.capabilities.supportedLteBands
         require(client.profile.capabilities.supportsLteBandLock) { "هذا الراوتر لا يعلن دعم Band Lock" }
 
+        onProgress("التحقق من الإعداد الأصلي قبل أي تغيير...")
+        val originalBands = readConfiguredBands(supported)
+            ?: error("لن يبدأ التحسين: الـFirmware لم يعطِ lte_band_lock موثوقًا يمكن استعادته بأمان")
+
         onProgress("قياس خط الأساس من عدة قراءات...")
         val first = client.readSnapshot()
-        val originalBands = readConfiguredBands(first, supported)
         val baselineSamples = collectRadioSamples(first)
+        require(baselineSamples.isNotEmpty()) { "تعذر جمع قراءات راديو موثوقة؛ لم يتم تغيير أي إعداد" }
+
         val baselinePerformance = safePerformanceProbe()
         val baseline = evaluate(
             bands = originalBands,
@@ -68,6 +74,7 @@ class SmartBandOptimizer(
             goal = goal,
             writeVerified = true
         )
+        require(baseline.verified) { "خط الأساس لا يطابق الإعداد المقروء بثقة؛ لم يتم تغيير أي إعداد" }
 
         val candidates = buildCandidates(first, originalBands, supported)
             .filter { it.isNotEmpty() && it != originalBands }
@@ -80,16 +87,25 @@ class SmartBandOptimizer(
             onProgress("اختبار ${index + 1}/${candidates.size}: السماح بـ ${formatBands(bands)}")
             val operation = runCatching { client.setLteBands(bands) }.getOrNull() ?: continue
 
-            // A HTTP success is not enough. The exact requested mask must be read back.
-            if (!operation.success || !operation.verified) continue
+            // A HTTP success is not proof. Exact requested mask read-back is mandatory.
+            if (!operation.success || !operation.verified) {
+                restoreExact(originalBands)
+                continue
+            }
 
             delay(SETTLE_MS)
             val samples = collectRadioSamples()
-            if (samples.isEmpty()) continue
+            if (samples.isEmpty()) {
+                restoreExact(originalBands)
+                continue
+            }
 
             val observed = samples.flatMap { activeLteBands(it) }.toSet()
             val observedConsistent = observed.isNotEmpty() && observed.all { it in bands }
-            if (!observedConsistent) continue
+            if (!observedConsistent) {
+                restoreExact(originalBands)
+                continue
+            }
 
             val performance = safePerformanceProbe()
             val evaluation = evaluate(
@@ -110,22 +126,23 @@ class SmartBandOptimizer(
             onProgress("تطبيق أفضل إعداد والتحقق النهائي...")
             val finalWrite = runCatching { client.setLteBands(best.bands) }.getOrNull()
             if (finalWrite?.success != true || !finalWrite.verified) {
-                restore(originalBands, supported)
+                restoreExact(originalBands)
                 return SmartOptimizationReport(
                     baseline,
                     baseline,
                     evaluations,
                     false,
-                    "لم ينجح التحقق النهائي من إعداد الفائز؛ تمت استعادة الإعداد السابق"
+                    "لم ينجح التحقق النهائي من إعداد الفائز؛ تمت استعادة الإعداد الأصلي الموثق"
                 )
             }
 
             delay(FINAL_VERIFY_SETTLE_MS)
             val finalSamples = collectRadioSamples()
             val finalObserved = finalSamples.flatMap { activeLteBands(it) }.toSet()
-            val finalConsistent = finalObserved.isNotEmpty() && finalObserved.all { it in best.bands }
+            val finalConsistent = finalSamples.isNotEmpty() &&
+                finalObserved.isNotEmpty() && finalObserved.all { it in best.bands }
             if (!finalConsistent) {
-                restore(originalBands, supported)
+                restoreExact(originalBands)
                 return SmartOptimizationReport(
                     baseline,
                     baseline,
@@ -144,17 +161,17 @@ class SmartBandOptimizer(
             )
         }
 
-        onProgress("لا يوجد تحسن موثوق — استعادة الإعداد السابق...")
-        restore(originalBands, supported)
+        onProgress("لا يوجد تحسن موثوق — استعادة الإعداد الأصلي...")
+        val restored = restoreExact(originalBands)
         return SmartOptimizationReport(
             baseline = baseline,
             best = baseline,
             evaluations = evaluations,
             changed = false,
-            message = if (evaluations.size <= 1) {
-                "لم توجد بدائل اجتازت التحقق الصارم"
-            } else {
-                "لا يوجد تحسن موثوق كافٍ؛ تم الحفاظ على الإعداد السابق"
+            message = when {
+                !restored -> "لم يوجد تحسن موثوق، وتعذر التحقق من الاستعادة؛ راجع إعداد Band Lock في الراوتر"
+                evaluations.size <= 1 -> "لم توجد بدائل اجتازت التحقق الصارم؛ الإعداد الأصلي مستعاد ومتحقق"
+                else -> "لا يوجد تحسن موثوق كافٍ؛ تم استعادة الإعداد الأصلي والتحقق منه"
             }
         )
     }
@@ -162,10 +179,13 @@ class SmartBandOptimizer(
     private suspend fun collectRadioSamples(first: RouterSnapshot? = null): List<RouterSnapshot> {
         val samples = mutableListOf<RouterSnapshot>()
         first?.let(samples::add)
-        while (samples.size < RADIO_SAMPLES) {
+        var attempts = if (first == null) 0 else 1
+
+        while (samples.size < RADIO_SAMPLES && attempts < MAX_SAMPLE_ATTEMPTS) {
+            attempts++
             val snapshot = runCatching { client.readSnapshot() }.getOrNull()
             if (snapshot != null) samples += snapshot
-            if (samples.size < RADIO_SAMPLES) delay(SAMPLE_INTERVAL_MS)
+            if (samples.size < RADIO_SAMPLES && attempts < MAX_SAMPLE_ATTEMPTS) delay(SAMPLE_INTERVAL_MS)
         }
         return samples
     }
@@ -174,17 +194,17 @@ class SmartBandOptimizer(
         runCatching { probe.measure(includeDownload = true) }
             .getOrElse { NetworkPerformance(null, null, null, null) }
 
-    private suspend fun restore(originalBands: Set<Int>, supported: Set<Int>) {
-        val restoreBands = originalBands.ifEmpty { supported }
-        if (restoreBands.isNotEmpty()) runCatching { client.setLteBands(restoreBands) }
+    private suspend fun restoreExact(originalBands: Set<Int>): Boolean {
+        if (originalBands.isEmpty()) return false
+        val result = runCatching { client.setLteBands(originalBands) }.getOrNull()
+        return result?.success == true && result.verified
     }
 
-    private suspend fun readConfiguredBands(snapshot: RouterSnapshot, supported: Set<Int>): Set<Int> {
-        val raw = runCatching { client.readRaw(setOf("lte_band_lock", "wan_active_band")) }.getOrNull()
-        val mask = raw?.optString("lte_band_lock").orEmpty()
-        val decoded = BandEncoding.decodeLteMask(mask, supported)
-        if (decoded.isNotEmpty()) return decoded
-        return activeLteBands(snapshot)
+    private suspend fun readConfiguredBands(supported: Set<Int>): Set<Int>? {
+        val raw = runCatching { client.readRaw(setOf("lte_band_lock")) }.getOrNull() ?: return null
+        val mask = raw.optString("lte_band_lock").trim()
+        if (mask.isBlank()) return null
+        return BandEncoding.decodeLteMask(mask, supported).takeIf { it.isNotEmpty() }
     }
 
     private fun buildCandidates(
@@ -196,7 +216,7 @@ class SmartBandOptimizer(
         val active = activeLteBands(snapshot).filter { it in supported }.toSet()
         val primary = extractBand(snapshot.lteBand)?.takeIf { it in supported }
 
-        if (original.isNotEmpty()) result += original
+        result += original
         if (active.isNotEmpty()) result += active
         active.sorted().forEach { result += setOf(it) }
 
@@ -231,9 +251,10 @@ class SmartBandOptimizer(
     ): CandidateEvaluation {
         val quality = qualityEngine.scoreSamples(samples).total
         val observed = samples.flatMap { activeLteBands(it) }.toSet()
-        val observedConsistent = observed.isNotEmpty() && (bands.isEmpty() || observed.all { it in bands })
+        val observedConsistent = observed.isNotEmpty() && observed.all { it in bands }
         val caConfirmedSamples = samples.count { it.caActive && actualLteCarrierCount(it) >= 2 }
-        val caActive = caConfirmedSamples >= REQUIRED_CA_SAMPLES.coerceAtMost(samples.size)
+        val caRequired = minOf(REQUIRED_CA_SAMPLES, samples.size).coerceAtLeast(1)
+        val caActive = samples.isNotEmpty() && caConfirmedSamples >= caRequired
         val verified = writeVerified && observedConsistent && quality > 0
         val score = if (verified) performanceScore(performance, quality, caActive, goal) else 0
 
@@ -283,7 +304,6 @@ class SmartBandOptimizer(
         }
         if (weight <= 0.0) return quality
 
-        // Small bonus only for observed live CA with multiple LTE carriers, never for configured bands.
         val caBonus = if (caActive) 2 else 0
         return ((sum / weight).roundToInt() + caBonus).coerceIn(0, 100)
     }
@@ -302,6 +322,7 @@ class SmartBandOptimizer(
         private const val SETTLE_MS = 6_000L
         private const val FINAL_VERIFY_SETTLE_MS = 3_000L
         private const val RADIO_SAMPLES = 4
+        private const val MAX_SAMPLE_ATTEMPTS = 8
         private const val SAMPLE_INTERVAL_MS = 750L
         private const val REQUIRED_CA_SAMPLES = 2
         private const val MIN_IMPROVEMENT = 6
