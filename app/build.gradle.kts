@@ -3,6 +3,17 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val stableStoreFile = System.getenv("ZTE_SIGNING_STORE_FILE")
+val stableStorePassword = System.getenv("ZTE_SIGNING_STORE_PASSWORD")
+val stableKeyAlias = System.getenv("ZTE_SIGNING_KEY_ALIAS")
+val stableKeyPassword = System.getenv("ZTE_SIGNING_KEY_PASSWORD")
+val hasStableSigning = listOf(
+    stableStoreFile,
+    stableStorePassword,
+    stableKeyAlias,
+    stableKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.malik.ztesmartmanager"
     compileSdk = 36
@@ -11,8 +22,26 @@ android {
         applicationId = "com.malik.ztesmartmanager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 33
-        versionName = "0.5.5"
+        versionCode = 34
+        versionName = "0.5.6"
+    }
+
+    if (hasStableSigning) {
+        signingConfigs {
+            create("stableRelease") {
+                storeFile = file(stableStoreFile!!)
+                storePassword = stableStorePassword
+                keyAlias = stableKeyAlias
+                keyPassword = stableKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            isMinifyEnabled = false
+            signingConfig = if (hasStableSigning) signingConfigs.getByName("stableRelease") else null
+        }
     }
 
     buildFeatures {
