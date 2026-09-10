@@ -11,8 +11,8 @@ android {
         applicationId = "com.malik.ztesmartmanager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 13
-        versionName = "0.2.6"
+        versionCode = 14
+        versionName = "0.2.7"
     }
 
     buildFeatures {
