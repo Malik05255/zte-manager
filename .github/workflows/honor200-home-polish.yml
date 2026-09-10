@@ -1,0 +1,99 @@
+name: Honor 200 home polish
+
+on:
+  push:
+    branches:
+      - feature/connect-performance-credentials-0.5.7
+    paths:
+      - .github/workflows/honor200-home-polish.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/connect-performance-credentials-0.5.7
+      - name: Adapt reference dashboard to Honor 200 class displays
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/malik/ztesmartmanager/ReferenceHomeDashboard.kt')
+          s = p.read_text()
+
+          def once(old, new):
+              global s
+              if old not in s:
+                  raise SystemExit('missing expected block: ' + old[:100])
+              s = s.replace(old, new, 1)
+
+          once(
+              '        val designHeight = (maxHeight.value / uiScale).dp\n',
+              '        val designHeight = (maxHeight.value / uiScale).dp\n        // HONOR 200 is a tall 2664x1200-class display. Use the extra vertical room for\n        // the actual dashboard cards instead of leaving a large dead strip above navigation.\n        val tallLayout = maxHeight.value / maxWidth.value >= 2.0f\n'
+          )
+          once(
+              '                smartBusy = smartBusy,\n                onDisconnect = onDisconnect,',
+              '                smartBusy = smartBusy,\n                tallLayout = tallLayout,\n                onDisconnect = onDisconnect,'
+          )
+          once(
+              '    smartBusy: Boolean,\n    onDisconnect: () -> Unit,',
+              '    smartBusy: Boolean,\n    tallLayout: Boolean,\n    onDisconnect: () -> Unit,'
+          )
+          once('        ReferenceNetworkHeroCard(snapshot)\n', '        ReferenceNetworkHeroCard(snapshot, tallLayout)\n')
+          once('        ReferenceSignalMetricsRow(snapshot)\n', '        ReferenceSignalMetricsRow(snapshot, tallLayout)\n')
+          once(
+              '            modifier = Modifier.fillMaxWidth().height(131.dp),',
+              '            modifier = Modifier.fillMaxWidth().height(if (tallLayout) 150.dp else 131.dp),'
+          )
+          once(
+              '            modifier = Modifier.fillMaxWidth().height(118.dp),',
+              '            modifier = Modifier.fillMaxWidth().height(if (tallLayout) 136.dp else 118.dp),'
+          )
+          once(
+              '            modifier = Modifier.fillMaxWidth().height(92.dp),',
+              '            modifier = Modifier.fillMaxWidth().height(if (tallLayout) 112.dp else 92.dp),'
+          )
+          once(
+              'private fun ReferenceNetworkHeroCard(snapshot: RouterSnapshot) {',
+              'private fun ReferenceNetworkHeroCard(snapshot: RouterSnapshot, tallLayout: Boolean) {'
+          )
+          once(
+              '        modifier = Modifier.fillMaxWidth().height(151.dp),',
+              '        modifier = Modifier.fillMaxWidth().height(if (tallLayout) 185.dp else 151.dp),'
+          )
+          once(
+              '                modifier = Modifier.fillMaxHeight().width(105.dp)',
+              '                modifier = Modifier.fillMaxHeight().width(if (tallLayout) 118.dp else 105.dp)'
+          )
+          once(
+              '                        .height(49.dp)\n',
+              '                        .height(if (tallLayout) 60.dp else 49.dp)\n'
+          )
+          once(
+              'private fun ReferenceSignalMetricsRow(snapshot: RouterSnapshot) {',
+              'private fun ReferenceSignalMetricsRow(snapshot: RouterSnapshot, tallLayout: Boolean) {'
+          )
+          once(
+              '        modifier = Modifier.fillMaxWidth().height(56.dp),',
+              '        modifier = Modifier.fillMaxWidth().height(if (tallLayout) 64.dp else 56.dp),'
+          )
+
+          # Make the router illustration closer to the taller real ZTE CPE silhouette used by the reference.
+          once('            val routerW = size.width * .42f\n            val routerH = size.height * .60f',
+               '            val routerW = size.width * .50f\n            val routerH = size.height * .68f')
+
+          p.write_text(s)
+          PY
+      - name: Commit Honor 200 layout and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/malik/ztesmartmanager/ReferenceHomeDashboard.kt
+          git rm .github/workflows/honor200-home-polish.yml
+          git commit -m "Tune home dashboard for Honor 200 tall display"
+          git push origin HEAD:feature/connect-performance-credentials-0.5.7
