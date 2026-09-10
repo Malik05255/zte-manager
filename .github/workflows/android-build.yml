@@ -32,6 +32,9 @@ jobs:
         with:
           gradle-version: "9.6.0"
 
+      - name: Run truth-first unit tests
+        run: gradle :app:testDebugUnitTest --stacktrace
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
