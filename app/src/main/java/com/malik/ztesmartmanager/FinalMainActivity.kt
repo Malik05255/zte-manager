@@ -109,16 +109,19 @@ private fun FinalManagerApp() {
     val credentialStore = remember(context) { SecureRouterCredentialStore(context) }
     var rememberPassword by rememberSaveable { mutableStateOf(false) }
     var credentialsLoaded by remember { mutableStateOf(false) }
+    var autoDetectGateway by remember { mutableStateOf(false) }
     var latestSafetyBackup by remember { mutableStateOf<RouterSettingsBackup?>(null) }
     val scope = rememberCoroutineScope()
 
     androidx.compose.runtime.LaunchedEffect(credentialStore) {
         if (!credentialsLoaded) {
             val saved = withContext(Dispatchers.IO) { credentialStore.load() }
-            saved?.let {
-                routerAddress = it.routerAddress
-                password = it.password
+            if (saved != null) {
+                routerAddress = saved.routerAddress
+                password = saved.password
                 rememberPassword = true
+            } else {
+                autoDetectGateway = true
             }
             credentialsLoaded = true
         }
@@ -405,6 +408,7 @@ private fun FinalManagerApp() {
                 rememberPassword = checked
                 if (!checked) credentialStore.clear()
             },
+            autoDetectGateway = autoDetectGateway,
             status = status,
             busy = connectBusy,
             onConnect = ::connect
