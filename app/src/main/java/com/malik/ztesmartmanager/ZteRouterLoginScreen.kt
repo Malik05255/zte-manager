@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -49,16 +48,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val RouterLoginBgTop = Color(0xFFF8FAFC)
-private val RouterLoginBgBottom = Color(0xFFEFF4F8)
-private val RouterLoginCard = Color(0xFFFFFFFF)
-private val RouterLoginInk = Color(0xFF14202B)
-private val RouterLoginMuted = Color(0xFF687784)
-private val RouterLoginBlue = Color(0xFF1769E8)
-private val RouterLoginBlueDark = Color(0xFF0B438F)
-private val RouterLoginLine = Color(0xFFD7E0E8)
-private val RouterLoginGreen = Color(0xFF20B66A)
-private val RouterLoginError = Color(0xFFD84747)
+private val LoginBgTop = Color(0xFFF8FAFD)
+private val LoginBgBottom = Color(0xFFEDF3F8)
+private val LoginCard = Color.White
+private val LoginInk = Color(0xFF10243A)
+private val LoginMuted = Color(0xFF718096)
+private val LoginBlue = Color(0xFF1769E8)
+private val LoginBlueDark = Color(0xFF0A438E)
+private val LoginLine = Color(0xFFD8E2EC)
+private val LoginGreen = Color(0xFF20B66A)
+private val LoginError = Color(0xFFD84747)
 
 @Composable
 fun ZteRouterLoginScreen(
@@ -77,7 +76,7 @@ fun ZteRouterLoginScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(RouterLoginBgTop, RouterLoginBgBottom)))
+            .background(Brush.verticalGradient(listOf(LoginBgTop, LoginBgBottom)))
             .statusBarsPadding()
             .navigationBarsPadding()
             .imePadding()
@@ -86,25 +85,18 @@ fun ZteRouterLoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Spacer(Modifier.height(12.dp))
-            RouterDeviceIllustration()
+            RouterMark()
             Spacer(Modifier.height(14.dp))
 
             Text(
                 text = "ZTE Smart HAI",
-                color = RouterLoginInk,
-                fontSize = 29.sp,
+                color = LoginInk,
+                fontSize = 28.sp,
                 fontWeight = FontWeight.Black
-            )
-            Text(
-                text = "إدارة الراوتر والشبكة",
-                color = RouterLoginMuted,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(top = 3.dp)
             )
 
             Spacer(Modifier.height(22.dp))
@@ -112,73 +104,44 @@ fun ZteRouterLoginScreen(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .widthIn(max = 500.dp)
-                    .shadow(18.dp, RoundedCornerShape(28.dp)),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = RouterLoginCard),
+                    .widthIn(max = 460.dp)
+                    .shadow(14.dp, RoundedCornerShape(26.dp)),
+                shape = RoundedCornerShape(26.dp),
+                colors = CardDefaults.cardColors(containerColor = LoginCard),
                 border = androidx.compose.foundation.BorderStroke(1.dp, Color.White)
             ) {
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier
-                                .size(11.dp)
-                                .clip(CircleShape)
-                                .background(RouterLoginGreen)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Column {
-                            Text(
-                                text = "الاتصال المحلي بالراوتر",
-                                color = RouterLoginInk,
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "أدخل عنوان لوحة الإدارة وكلمة المرور",
-                                color = RouterLoginMuted,
-                                fontSize = 13.sp
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(22.dp))
-
                     OutlinedTextField(
                         value = routerAddress,
                         onValueChange = onRouterAddressChange,
                         label = { Text("عنوان الراوتر", fontSize = 14.sp) },
-                        supportingText = { Text("مثال: 192.168.0.1", fontSize = 12.sp) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         singleLine = true,
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = routerFieldColors()
+                        colors = loginFieldColors()
                     )
 
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     OutlinedTextField(
                         value = password,
                         onValueChange = onPasswordChange,
-                        label = { Text("كلمة مرور الإدارة", fontSize = 14.sp) },
+                        label = { Text("كلمة المرور", fontSize = 14.sp) },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
                         enabled = !busy,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = routerFieldColors()
+                        colors = loginFieldColors()
                     )
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 8.dp),
+                            .padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Checkbox(
@@ -186,26 +149,19 @@ fun ZteRouterLoginScreen(
                             onCheckedChange = onRememberPasswordChange,
                             enabled = !busy,
                             colors = CheckboxDefaults.colors(
-                                checkedColor = RouterLoginBlue,
-                                uncheckedColor = RouterLoginMuted
+                                checkedColor = LoginBlue,
+                                uncheckedColor = LoginMuted
                             )
                         )
                         Text(
-                            text = "حفظ كلمة المرور على هذا الجهاز",
-                            color = RouterLoginInk,
+                            text = "حفظ كلمة المرور",
+                            color = LoginInk,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
 
-                    Text(
-                        text = "عند التفعيل تُحفظ كلمة المرور مشفرة داخل حماية أندرويد.",
-                        color = RouterLoginMuted,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(start = 12.dp, top = 1.dp)
-                    )
-
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(12.dp))
 
                     Button(
                         onClick = onConnect,
@@ -213,37 +169,37 @@ fun ZteRouterLoginScreen(
                         modifier = Modifier.fillMaxWidth().height(54.dp),
                         shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = RouterLoginBlue,
+                            containerColor = LoginBlue,
                             disabledContainerColor = Color(0xFFAFC4DF)
                         )
                     ) {
                         Text(
-                            text = if (busy) "جاري الاتصال…" else "اتصال بالراوتر",
+                            text = if (busy) "جاري الاتصال…" else "اتصال",
                             color = Color.White,
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
-                    if (status.isNotBlank() && status != "غير متصل") {
+                    if (status.isNotBlank() && status != "غير متصل" && status != "جاري الاتصال...") {
                         Spacer(Modifier.height(14.dp))
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(if (isError) Color(0xFFFFF2F2) else Color(0xFFF0F7FF))
+                                .background(if (isError) Color(0xFFFFF3F3) else Color(0xFFF1F7FF))
                                 .border(
                                     1.dp,
-                                    if (isError) Color(0xFFFFD2D2) else Color(0xFFD6E8FF),
+                                    if (isError) Color(0xFFFFD6D6) else Color(0xFFD8E8FF),
                                     RoundedCornerShape(14.dp)
                                 )
-                                .padding(13.dp)
+                                .padding(12.dp)
                         ) {
                             Text(
                                 text = status,
-                                color = if (isError) RouterLoginError else RouterLoginBlueDark,
+                                color = if (isError) LoginError else LoginBlueDark,
                                 fontSize = 14.sp,
-                                lineHeight = 21.sp,
+                                lineHeight = 20.sp,
                                 fontWeight = FontWeight.Medium,
                                 textAlign = TextAlign.Start
                             )
@@ -251,83 +207,49 @@ fun ZteRouterLoginScreen(
                     }
                 }
             }
-
-            Text(
-                text = "يجب أن يكون الهاتف متصلًا بشبكة الراوتر عند استخدام الاتصال المحلي.",
-                color = RouterLoginMuted,
-                fontSize = 13.sp,
-                lineHeight = 20.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = 460.dp).padding(horizontal = 14.dp, vertical = 18.dp)
-            )
         }
     }
 }
 
 @Composable
-private fun RouterDeviceIllustration() {
+private fun RouterMark() {
     Box(
         modifier = Modifier
-            .size(width = 112.dp, height = 132.dp)
-            .shadow(12.dp, RoundedCornerShape(32.dp))
-            .clip(RoundedCornerShape(32.dp))
+            .size(88.dp)
+            .shadow(10.dp, RoundedCornerShape(26.dp))
+            .clip(RoundedCornerShape(26.dp))
             .background(Color.White)
-            .border(1.dp, RouterLoginLine, RoundedCornerShape(32.dp)),
+            .border(1.dp, LoginLine, RoundedCornerShape(26.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Canvas(Modifier.size(width = 78.dp, height = 102.dp)) {
-            val centerX = size.width / 2f
-            val bodyTop = size.height * 0.10f
-            val bodyBottom = size.height * 0.87f
-            drawRoundRect(
-                color = Color(0xFFF7FAFC),
-                topLeft = Offset(size.width * 0.18f, bodyTop),
-                size = androidx.compose.ui.geometry.Size(size.width * 0.64f, bodyBottom - bodyTop),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f, 18f)
-            )
-            drawRoundRect(
-                color = RouterLoginLine,
-                topLeft = Offset(size.width * 0.18f, bodyTop),
-                size = androidx.compose.ui.geometry.Size(size.width * 0.64f, bodyBottom - bodyTop),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(18f, 18f),
-                style = Stroke(width = 2.2f)
-            )
-            drawLine(
-                color = RouterLoginBlueDark,
-                start = Offset(centerX, size.height * 0.25f),
-                end = Offset(centerX, size.height * 0.52f),
-                strokeWidth = 3.2f,
-                cap = StrokeCap.Round
-            )
+        Canvas(Modifier.size(56.dp)) {
+            val center = Offset(size.width / 2f, size.height / 2f)
+            drawCircle(LoginBlue.copy(alpha = 0.08f), radius = 25f, center = center)
+            drawCircle(LoginBlue, radius = 7f, center = center)
             repeat(3) { index ->
-                drawCircle(
-                    color = if (index == 0) RouterLoginGreen else Color(0xFFB7C4CE),
-                    radius = 4.2f,
-                    center = Offset(centerX, size.height * (0.62f + index * 0.075f))
-                )
-            }
-            repeat(3) { ring ->
+                val inset = 8f + index * 7f
                 drawArc(
-                    color = RouterLoginBlue.copy(alpha = 0.50f - ring * 0.10f),
-                    startAngle = 205f,
-                    sweepAngle = 130f,
+                    color = LoginBlue.copy(alpha = 0.78f - index * 0.16f),
+                    startAngle = 210f,
+                    sweepAngle = 120f,
                     useCenter = false,
-                    topLeft = Offset(centerX - 14f - ring * 7f, size.height * 0.03f - ring * 5f),
-                    size = androidx.compose.ui.geometry.Size(28f + ring * 14f, 26f + ring * 10f),
-                    style = Stroke(width = 2f, cap = StrokeCap.Round)
+                    topLeft = Offset(inset, inset),
+                    size = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
+                    style = Stroke(width = 2.4f, cap = StrokeCap.Round)
                 )
             }
+            drawCircle(LoginGreen, radius = 3.6f, center = Offset(center.x, size.height - 7f))
         }
     }
 }
 
 @Composable
-private fun routerFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = RouterLoginBlue,
-    unfocusedBorderColor = RouterLoginLine,
-    focusedLabelColor = RouterLoginBlueDark,
-    unfocusedLabelColor = RouterLoginMuted,
-    cursorColor = RouterLoginBlue,
-    focusedTextColor = RouterLoginInk,
-    unfocusedTextColor = RouterLoginInk
+private fun loginFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = LoginBlue,
+    unfocusedBorderColor = LoginLine,
+    focusedLabelColor = LoginBlueDark,
+    unfocusedLabelColor = LoginMuted,
+    cursorColor = LoginBlue,
+    focusedTextColor = LoginInk,
+    unfocusedTextColor = LoginInk
 )
