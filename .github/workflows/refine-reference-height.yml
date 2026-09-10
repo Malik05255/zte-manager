@@ -2,8 +2,10 @@ name: Refine reference dashboard height
 
 on:
   push:
-    branches: [feature/connect-performance-credentials-0.5.7]
-    paths: [.github/workflows/refine-reference-height.yml]
+    branches:
+      - feature/connect-performance-credentials-0.5.7
+    paths:
+      - .github/workflows/refine-reference-height.yml
 
 permissions:
   contents: write
@@ -16,30 +18,28 @@ jobs:
         with:
           ref: feature/connect-performance-credentials-0.5.7
       - name: Use full available viewport
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('app/src/main/java/com/malik/ztesmartmanager/ReferenceHomeDashboard.kt')
-          s = p.read_text()
-          old = '''        val designWidth = 393.dp
+          p = Path("app/src/main/java/com/malik/ztesmartmanager/ReferenceHomeDashboard.kt")
+          s = p.read_text(encoding="utf-8")
+          old = """        val designWidth = 393.dp
         val designHeight = 699.dp
         val scaleX = maxWidth.value / designWidth.value
         val scaleY = maxHeight.value / designHeight.value
         val uiScale = scaleX
-'''
-          new = '''        val designWidth = 393.dp
+"""
+          new = """        val designWidth = 393.dp
         val scaleX = maxWidth.value / designWidth.value
         val uiScale = scaleX
-        // Keep the reference width/proportions, but let the logical canvas grow on tall phones.
-        // The weighted spacer then anchors the bottom navigation to the real bottom edge instead
-        // of leaving a large blank strip above or below the dashboard.
         val designHeight = (maxHeight.value / uiScale).dp
-'''
+"""
           if old not in s:
-              raise SystemExit('expected viewport block not found')
-          p.write_text(s.replace(old, new, 1))
+              raise SystemExit("expected viewport block not found")
+          p.write_text(s.replace(old, new, 1), encoding="utf-8")
           PY
-      - name: Commit
+      - name: Commit source fix
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
