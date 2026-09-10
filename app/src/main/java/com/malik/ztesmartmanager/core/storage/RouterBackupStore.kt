@@ -67,6 +67,7 @@ object RouterSettingsBackupCodec {
         putNullable("firmware", backup.firmware)
         putNullable("hardwareVersion", backup.hardwareVersion)
         putNullable("lteBandLock", backup.lteBandLock)
+        putNullable("nrBandLock", backup.nrBandLock)
         putNullable("nrSaBandLock", backup.nrSaBandLock)
         putNullable("nrNsaBandLock", backup.nrNsaBandLock)
         putNullable("ltePciLock", backup.ltePciLock)
@@ -84,6 +85,7 @@ object RouterSettingsBackupCodec {
             firmware = json.nullableString("firmware"),
             hardwareVersion = json.nullableString("hardwareVersion"),
             lteBandLock = json.nullableString("lteBandLock"),
+            nrBandLock = json.nullableString("nrBandLock"),
             nrSaBandLock = json.nullableString("nrSaBandLock"),
             nrNsaBandLock = json.nullableString("nrNsaBandLock"),
             ltePciLock = json.nullableString("ltePciLock"),
