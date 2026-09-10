@@ -170,6 +170,19 @@ fun FinalDashboard(
                 }
 
                 item {
+                    FinalFiveGPrimaryCard(
+                        snapshot = data,
+                        capabilities = capabilities,
+                        selectedNr = selectedNr,
+                        busy = controlBusy,
+                        compact = compact,
+                        onNrToggle = onNrToggle,
+                        onApplyNr = onApplyNr,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
                     if (tiny) {
                         Column(verticalArrangement = Arrangement.spacedBy(gap)) {
                             FinalSmartCard(
