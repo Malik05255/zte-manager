@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.matchParentSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -41,7 +42,6 @@ import kotlin.math.min
 private val SignalCardBg = Color(0xFFF7F2E9)
 private val SignalInk = Color(0xFF2A241E)
 private val SignalMuted = Color(0xFF776E63)
-private val SignalGold = Color(0xFF876126)
 private val SignalLte = Color(0xFF6E7B63)
 private val SignalNr = Color(0xFF9A6A2F)
 private val SignalGrid = Color(0xFFD8D0C4)
