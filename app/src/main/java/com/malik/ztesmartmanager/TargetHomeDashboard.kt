@@ -336,7 +336,7 @@ private fun TargetTower(snapshot:RouterSnapshot,onOpen:()->Unit,modifier:Modifie
             Spacer(Modifier.height(5.dp))
             Row(Modifier.fillMaxWidth().weight(1f),verticalAlignment=Alignment.CenterVertically){
                 TargetMiniMap(Modifier.weight(1.08f).fillMaxHeight(),snapshot.cellId?.toString()?:"—"); Spacer(Modifier.width(8.dp));
-                Column(Modifier.weight(.92f),horizontalAlignment=Alignment.End){ Text("الموقع غير مؤكد",color=THNavy,fontSize=9.sp,fontWeight=FontWeight.Bold); Text("Cell ${snapshot.cellId?:"—"}",color=THMuted,fontSize=7.5.sp,maxLines=1,overflow=TextOverflow.Ellipsis); Text("PCI ${snapshot.pci?:"—"}",color=THMuted,fontSize=7.5.sp) }
+                Column(Modifier.weight(.92f),horizontalAlignment=Alignment.End){ Text("الموقع غير مؤكد",color=THNavy,fontSize=9.sp,fontWeight=FontWeight.Bold); Text("خلية ${snapshot.cellId?:"—"}",color=THMuted,fontSize=7.5.sp,maxLines=1,overflow=TextOverflow.Ellipsis); Text("PCI ${snapshot.pci?:"—"}",color=THMuted,fontSize=7.5.sp) }
             }
         }
     }
