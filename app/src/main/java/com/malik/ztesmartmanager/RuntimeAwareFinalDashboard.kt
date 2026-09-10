@@ -189,6 +189,7 @@ fun RuntimeAwareFinalDashboard(
             modifier = Modifier.fillMaxWidth()
         )
         RuntimeTrafficStrip(traffic = traffic, modifier = Modifier.fillMaxWidth())
+        SignalHistoryCard(samples = telemetrySamples, modifier = Modifier.fillMaxWidth())
         if (detailsExpanded && runtime != null) {
             RuntimeCapabilityDetails(
                 report = runtime,
