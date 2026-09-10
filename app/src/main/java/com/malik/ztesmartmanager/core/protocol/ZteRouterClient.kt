@@ -22,9 +22,6 @@ class ZteRouterClient(routerAddress: String) {
         private set
 
     suspend fun login(adminPassword: String): RouterProfile {
-        // MC801A-family web UIs obtain these values before login. LD is required for the
-        // password challenge; WA/CR/RD allow us to include the same AD proof used by the
-        // stock UI on firmwares that expose it.
         val auth = readRaw(setOf("LD", "wa_inner_version", "cr_version", "RD"))
         val ld = auth.optString("LD").trim()
         if (ld.isBlank()) throw ZteAuthenticationException("لم يُرجع الراوتر قيمة LD المطلوبة للمصادقة")
@@ -139,29 +136,30 @@ class ZteRouterClient(routerAddress: String) {
         val active = extractBandNumber(readBack.optString("nr5g_action_band"))
         val activeConsistent = active == null || active in bands
         return OperationResult(
-            activeConsistent,
-            false,
-            if (activeConsistent) "قبل الراوتر أمر 5G، لكن لا يوجد read-back موثوق لهذا الـFirmware" else "التردد النشط لا يطابق اختيار 5G",
-            raw
+            success = activeConsistent,
+            verified = false,
+            message = if (activeConsistent) {
+                "قبل الراوتر أمر 5G، لكن لا يوجد read-back موثوق لهذا الـFirmware"
+            } else {
+                "التردد النشط لا يطابق اختيار 5G"
+            },
+            rawResult = raw
         )
     }
 
-    /**
-     * Read the persistent LTE cell-lock keys. Null means the firmware did not provide a coherent
-     * read-back, so callers must not perform a transactional cell change that depends on rollback.
-     */
     suspend fun readCellLockState(): CellLockState? {
         val raw = runCatching { readRaw(setOf("lte_pci_lock", "lte_earfcn_lock")) }.getOrNull() ?: return null
         val pci = raw.optString("lte_pci_lock").trim().toIntOrNull() ?: return null
         val earfcn = raw.optString("lte_earfcn_lock").trim().toIntOrNull() ?: return null
-
         val coherent = (pci == 0 && earfcn == 0) || (pci in 0..503 && earfcn > 0)
         return CellLockState(pci, earfcn).takeIf { coherent }
     }
 
     suspend fun setCellLock(pci: Int, earfcn: Int): OperationResult {
         if (!profile.capabilities.supportsCellLock) return unsupported("تثبيت الخلية")
-        if (pci !in 0..503 || earfcn <= 0) return OperationResult(false, false, "PCI LTE أو EARFCN غير صالح")
+        if (pci !in 0..503 || earfcn <= 0) {
+            return OperationResult(false, false, "PCI LTE أو EARFCN غير صالح")
+        }
 
         val raw = writeWithAd(
             goformId = "LTE_LOCK_CELL_SET",
@@ -174,12 +172,16 @@ class ZteRouterClient(routerAddress: String) {
 
         delay(700)
         val readBack = readCellLockState()
-        val verified = readBack?.pci == pci && readBack.earfcn == earfcn
+        val verified = readBack != null && readBack.pci == pci && readBack.earfcn == earfcn
 
         return OperationResult(
             success = true,
             verified = verified,
-            message = if (verified) "تم حفظ PCI/EARFCN والتحقق منهما" else "قبل الراوتر الأمر لكن لم يرجع قفلًا مطابقًا؛ لن يعتبره التطبيق مثبتًا",
+            message = if (verified) {
+                "تم حفظ PCI/EARFCN والتحقق منهما"
+            } else {
+                "قبل الراوتر الأمر لكن لم يرجع قفلًا مطابقًا؛ لن يعتبره التطبيق مثبتًا"
+            },
             rawResult = raw
         )
     }
@@ -201,7 +203,11 @@ class ZteRouterClient(routerAddress: String) {
         return OperationResult(
             success = true,
             verified = verified,
-            message = if (verified) "تمت إعادة اختيار الخلية للوضع التلقائي والتحقق من 0/0" else "قبل الراوتر أمر الإلغاء لكن read-back لم يؤكده",
+            message = if (verified) {
+                "تمت إعادة اختيار الخلية للوضع التلقائي والتحقق من 0/0"
+            } else {
+                "قبل الراوتر أمر الإلغاء لكن read-back لم يؤكده"
+            },
             rawResult = raw
         )
     }
@@ -215,7 +221,13 @@ class ZteRouterClient(routerAddress: String) {
             goformId = "SET_BEARER_PREFERENCE",
             values = mapOf("BearerPreference" to mode)
         )
-        return OperationResult(commandAccepted(raw), false, if (commandAccepted(raw)) "تم إرسال وضع الشبكة" else "رفض الراوتر وضع الشبكة", raw)
+        val accepted = commandAccepted(raw)
+        return OperationResult(
+            accepted,
+            false,
+            if (accepted) "تم إرسال وضع الشبكة؛ الحالة الفعلية ستُقرأ منفصلة" else "رفض الراوتر وضع الشبكة",
+            raw
+        )
     }
 
     suspend fun setAntennaState(state: Int): OperationResult {
@@ -225,7 +237,13 @@ class ZteRouterClient(routerAddress: String) {
             goformId = "BSP_ANTENNA_STATE_SET",
             values = mapOf("antenna_name" to "6", "state" to state.toString())
         )
-        return OperationResult(commandAccepted(raw), false, if (commandAccepted(raw)) "تم إرسال إعداد الهوائي" else "رفض الراوتر إعداد الهوائي", raw)
+        val accepted = commandAccepted(raw)
+        return OperationResult(
+            accepted,
+            false,
+            if (accepted) "تم إرسال إعداد الهوائي؛ لم يُعتبر متحققًا دون read-back" else "رفض الراوتر إعداد الهوائي",
+            raw
+        )
     }
 
     private suspend fun writeWithAd(goformId: String, values: Map<String, String>): String {
@@ -233,7 +251,9 @@ class ZteRouterClient(routerAddress: String) {
         val wa = auth.optString("wa_inner_version")
         val cr = auth.optString("cr_version")
         val rd = auth.optString("RD")
-        if (wa.isBlank() || cr.isBlank() || rd.isBlank()) throw ZteProtocolException("تعذر إنشاء AD للأمر")
+        if (wa.isBlank() || cr.isBlank() || rd.isBlank()) {
+            throw ZteProtocolException("تعذر إنشاء AD للأمر")
+        }
 
         val ad = ZteCrypto.adValue(wa, cr, rd)
         return transport.postForm(
@@ -257,7 +277,12 @@ class ZteRouterClient(routerAddress: String) {
     )
 
     private fun masksEqual(a: String, b: String): Boolean {
-        fun normalize(value: String) = value.trim().removePrefix("0x").removePrefix("0X").trimStart('0').lowercase().ifBlank { "0" }
+        fun normalize(value: String) = value.trim()
+            .removePrefix("0x")
+            .removePrefix("0X")
+            .trimStart('0')
+            .lowercase()
+            .ifBlank { "0" }
         return normalize(a) == normalize(b)
     }
 
@@ -267,7 +292,8 @@ class ZteRouterClient(routerAddress: String) {
         .mapNotNull { extractBandNumber(it) }
         .toSet()
 
-    private fun extractBandNumber(value: String): Int? = Regex("\\d+").find(value)?.value?.toIntOrNull()
+    private fun extractBandNumber(value: String): Int? =
+        Regex("\\d+").find(value)?.value?.toIntOrNull()
 
     private fun firstValue(json: JSONObject, vararg names: String): String? = names
         .asSequence()
