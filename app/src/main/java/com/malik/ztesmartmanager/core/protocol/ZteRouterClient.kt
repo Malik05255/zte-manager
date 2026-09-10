@@ -8,6 +8,13 @@ import com.malik.ztesmartmanager.core.profile.RouterProfileRegistry
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 
+data class CellLockState(
+    val pci: Int,
+    val earfcn: Int
+) {
+    val automatic: Boolean get() = pci == 0 && earfcn == 0
+}
+
 class ZteRouterClient(routerAddress: String) {
     private val transport = ZteHttpTransport(routerAddress)
 
@@ -35,8 +42,6 @@ class ZteRouterClient(routerAddress: String) {
             loginParams["AD"] = ZteCrypto.adValue(wa, cr, rd)
         }
 
-        // goform_set_cmd_process is a POST endpoint in the router web UI. Using GET here can
-        // appear to work on permissive firmware while silently failing on stricter builds.
         val loginRaw = transport.postForm(SET_PATH, loginParams)
         val loginJson = runCatching { JSONObject(loginRaw) }
             .getOrElse { throw ZteAuthenticationException("رد تسجيل الدخول غير صالح") }
@@ -141,9 +146,22 @@ class ZteRouterClient(routerAddress: String) {
         )
     }
 
+    /**
+     * Read the persistent LTE cell-lock keys. Null means the firmware did not provide a coherent
+     * read-back, so callers must not perform a transactional cell change that depends on rollback.
+     */
+    suspend fun readCellLockState(): CellLockState? {
+        val raw = runCatching { readRaw(setOf("lte_pci_lock", "lte_earfcn_lock")) }.getOrNull() ?: return null
+        val pci = raw.optString("lte_pci_lock").trim().toIntOrNull() ?: return null
+        val earfcn = raw.optString("lte_earfcn_lock").trim().toIntOrNull() ?: return null
+
+        val coherent = (pci == 0 && earfcn == 0) || (pci in 0..503 && earfcn > 0)
+        return CellLockState(pci, earfcn).takeIf { coherent }
+    }
+
     suspend fun setCellLock(pci: Int, earfcn: Int): OperationResult {
         if (!profile.capabilities.supportsCellLock) return unsupported("تثبيت الخلية")
-        if (pci !in 0..1007 || earfcn <= 0) return OperationResult(false, false, "PCI أو EARFCN غير صالح")
+        if (pci !in 0..503 || earfcn <= 0) return OperationResult(false, false, "PCI LTE أو EARFCN غير صالح")
 
         val raw = writeWithAd(
             goformId = "LTE_LOCK_CELL_SET",
@@ -155,17 +173,41 @@ class ZteRouterClient(routerAddress: String) {
         if (!commandAccepted(raw)) return OperationResult(false, false, "الراوتر رفض تثبيت الخلية", raw)
 
         delay(700)
-        val readBack = readRaw(setOf("lte_pci_lock", "lte_earfcn_lock"))
-        val verified = readBack.optString("lte_pci_lock") == pci.toString() &&
-            readBack.optString("lte_earfcn_lock") == earfcn.toString()
+        val readBack = readCellLockState()
+        val verified = readBack?.pci == pci && readBack.earfcn == earfcn
 
         return OperationResult(
             success = true,
             verified = verified,
-            message = if (verified) "تم حفظ PCI/EARFCN والتحقق منهما" else "قبل الراوتر الأمر؛ يلزم تأكيده بعد استقرار/إعادة تشغيل الراوتر",
+            message = if (verified) "تم حفظ PCI/EARFCN والتحقق منهما" else "قبل الراوتر الأمر لكن لم يرجع قفلًا مطابقًا؛ لن يعتبره التطبيق مثبتًا",
             rawResult = raw
         )
     }
+
+    suspend fun clearCellLock(): OperationResult {
+        if (!profile.capabilities.supportsCellLock) return unsupported("إلغاء تثبيت الخلية")
+
+        val raw = writeWithAd(
+            goformId = "LTE_LOCK_CELL_SET",
+            values = mapOf(
+                "lte_pci_lock" to "0",
+                "lte_earfcn_lock" to "0"
+            )
+        )
+        if (!commandAccepted(raw)) return OperationResult(false, false, "الراوتر رفض إلغاء تثبيت الخلية", raw)
+
+        delay(700)
+        val verified = readCellLockState()?.automatic == true
+        return OperationResult(
+            success = true,
+            verified = verified,
+            message = if (verified) "تمت إعادة اختيار الخلية للوضع التلقائي والتحقق من 0/0" else "قبل الراوتر أمر الإلغاء لكن read-back لم يؤكده",
+            rawResult = raw
+        )
+    }
+
+    suspend fun restoreCellLock(state: CellLockState): OperationResult =
+        if (state.automatic) clearCellLock() else setCellLock(state.pci, state.earfcn)
 
     suspend fun setNetworkMode(mode: String): OperationResult {
         if (mode !in NETWORK_MODES) return OperationResult(false, false, "وضع شبكة غير معروف")
