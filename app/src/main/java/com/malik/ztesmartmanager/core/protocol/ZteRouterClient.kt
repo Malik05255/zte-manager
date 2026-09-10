@@ -19,8 +19,16 @@ data class ZteLoginBootstrap(
     val snapshot: RouterSnapshot
 )
 
+private data class AdMaterial(
+    val waInnerVersion: String,
+    val crVersion: String,
+    val rd: String
+)
+
 class ZteRouterClient(private val routerAddress: String) {
     private val transport = ZteHttpTransport(routerAddress)
+    private var cachedWaInnerVersion: String? = null
+    private var cachedCrVersion: String? = null
 
     var profile: RouterProfile = GenericZteProfile
         private set
@@ -66,10 +74,12 @@ class ZteRouterClient(private val routerAddress: String) {
             "password" to ZteCrypto.loginPassword(adminPassword, ld)
         )
 
-        val wa = auth.optString("wa_inner_version").trim()
-        val cr = auth.optString("cr_version").trim()
-        val rd = auth.optString("RD").trim()
-        if (wa.isNotBlank() && cr.isNotBlank() && rd.isNotBlank()) {
+        val wa = exactValue(auth, "wa_inner_version")?.trim().orEmpty()
+        val cr = exactValue(auth, "cr_version")?.trim()
+        val rd = exactValue(auth, "RD")?.trim().orEmpty()
+        if (wa.isNotBlank()) cachedWaInnerVersion = wa
+        if (cr != null) cachedCrVersion = cr
+        if (wa.isNotBlank() && cr != null && rd.isNotBlank()) {
             loginParams["AD"] = ZteCrypto.adValue(wa, cr, rd)
         }
 
@@ -110,6 +120,80 @@ class ZteRouterClient(private val routerAddress: String) {
             "multi_data" to "1"
         )
     )
+
+    private suspend fun readSingleRaw(field: String): JSONObject = transport.getJson(
+        path = GET_PATH,
+        params = mapOf(
+            "isTest" to "false",
+            "cmd" to field,
+            "_" to System.currentTimeMillis().toString()
+        )
+    )
+
+    /**
+     * Reads MC801A AD material without inventing values.
+     *
+     * The normal path is the documented/observed multi_data query. Some ZTE firmware revisions
+     * omit one token from a combined response, so a missing token is retried as a single-field GET.
+     * wa_inner_version and RD must be non-blank. cr_version may legitimately be an explicitly
+     * returned empty string; missing and empty are deliberately treated differently.
+     */
+    private suspend fun readAdMaterial(): AdMaterial {
+        val combined = readRaw(setOf("wa_inner_version", "cr_version", "RD"))
+
+        var wa = exactValue(combined, "wa_inner_version")?.trim().orEmpty()
+        var cr: String? = exactValue(combined, "cr_version")?.trim()
+        var rd = exactValue(combined, "RD")?.trim().orEmpty()
+
+        if (wa.isNotBlank()) cachedWaInnerVersion = wa
+        if (cr != null) cachedCrVersion = cr
+
+        if (wa.isBlank()) {
+            wa = cachedWaInnerVersion.orEmpty()
+        }
+        if (cr == null) {
+            cr = cachedCrVersion
+        }
+
+        if (wa.isBlank()) {
+            val retry = runCatching { readSingleRaw("wa_inner_version") }.getOrNull()
+            val retried = retry?.let { exactValue(it, "wa_inner_version") }?.trim().orEmpty()
+            if (retried.isNotBlank()) {
+                wa = retried
+                cachedWaInnerVersion = retried
+            }
+        }
+
+        if (cr == null) {
+            val retry = runCatching { readSingleRaw("cr_version") }.getOrNull()
+            if (retry != null && retry.has("cr_version") && !retry.isNull("cr_version")) {
+                cr = retry.optString("cr_version").trim()
+                cachedCrVersion = cr
+            }
+        }
+
+        if (rd.isBlank()) {
+            val retry = runCatching { readSingleRaw("RD") }.getOrNull()
+            rd = retry?.let { exactValue(it, "RD") }?.trim().orEmpty()
+        }
+
+        val missing = buildList {
+            if (wa.isBlank()) add("wa_inner_version")
+            if (cr == null) add("cr_version")
+            if (rd.isBlank()) add("RD")
+        }
+        if (missing.isNotEmpty()) {
+            throw ZteProtocolException(
+                "تعذر إنشاء AD: الراوتر لم يوفّر ${missing.joinToString("، ")} حتى بعد إعادة القراءة"
+            )
+        }
+
+        return AdMaterial(
+            waInnerVersion = wa,
+            crVersion = cr.orEmpty(),
+            rd = rd
+        )
+    }
 
     suspend fun readRuntimeCapabilities(): RuntimeCapabilityReport = RuntimeCapabilityProbe.probe(this)
 
@@ -289,7 +373,7 @@ class ZteRouterClient(private val routerAddress: String) {
         delay(700)
         val readBack = readRaw(setOf("lte_pci_lock", "lte_earfcn_lock"))
         val verified = isUnlockedValue(readBack.optString("lte_pci_lock")) &&
-            isUnlockedValue(readBack.optString("lte_earfcn_lock"))
+            readBack.optString("lte_earfcn_lock").let(::isUnlockedValue)
         return OperationResult(
             success = verified,
             verified = verified,
@@ -461,13 +545,8 @@ class ZteRouterClient(private val routerAddress: String) {
     }
 
     private suspend fun writeWithAd(goformId: String, values: Map<String, String>): String {
-        val auth = readRaw(setOf("wa_inner_version", "cr_version", "RD"))
-        val wa = auth.optString("wa_inner_version")
-        val cr = auth.optString("cr_version")
-        val rd = auth.optString("RD")
-        if (wa.isBlank() || cr.isBlank() || rd.isBlank()) throw ZteProtocolException("تعذر إنشاء AD للأمر")
-
-        val ad = ZteCrypto.adValue(wa, cr, rd)
+        val auth = readAdMaterial()
+        val ad = ZteCrypto.adValue(auth.waInnerVersion, auth.crVersion, auth.rd)
         return transport.postForm(
             path = SET_PATH,
             params = linkedMapOf(
