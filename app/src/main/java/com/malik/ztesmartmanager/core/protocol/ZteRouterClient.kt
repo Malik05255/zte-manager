@@ -5,6 +5,8 @@ import com.malik.ztesmartmanager.core.model.RouterRestoreReport
 import com.malik.ztesmartmanager.core.model.RouterRestoreStep
 import com.malik.ztesmartmanager.core.model.RouterSettingsBackup
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
+import com.malik.ztesmartmanager.core.model.RuntimeCapabilityEvidence
+import com.malik.ztesmartmanager.core.model.RuntimeCapabilityReport
 import com.malik.ztesmartmanager.core.profile.GenericZteProfile
 import com.malik.ztesmartmanager.core.profile.RouterProfile
 import com.malik.ztesmartmanager.core.profile.RouterProfileRegistry
@@ -67,6 +69,8 @@ class ZteRouterClient(routerAddress: String) {
             "multi_data" to "1"
         )
     )
+
+    suspend fun readRuntimeCapabilities(): RuntimeCapabilityReport = RuntimeCapabilityProbe.probe(this)
 
     /**
      * Capture exact restorable radio settings immediately before a write.
@@ -133,12 +137,12 @@ class ZteRouterClient(routerAddress: String) {
                 OperationResult(false, false, "نسخة Cell Lock ناقصة؛ لم يتم إرسال أمر غير قابل للتحقق")
             )
             isUnlockedValue(pci) && isUnlockedValue(earfcn) ->
-                steps += RouterRestoreStep("Cell lock", clearCellLock())
+                steps += RouterRestoreStep("Cell lock", clearCellLockInternal())
             else -> {
                 val pciNumber = pci.toIntOrNull()
                 val earfcnNumber = earfcn.toIntOrNull()
                 val result = if (pciNumber != null && earfcnNumber != null) {
-                    setCellLock(pciNumber, earfcnNumber)
+                    setCellLockInternal(pciNumber, earfcnNumber)
                 } else {
                     OperationResult(false, false, "قيم Cell Lock المحفوظة غير قابلة للتحويل بأمان")
                 }
@@ -158,6 +162,7 @@ class ZteRouterClient(routerAddress: String) {
         if (bands.isEmpty() || !profile.capabilities.supportedLteBands.containsAll(bands)) {
             return OperationResult(false, false, "اختيار 4G يحتوي ترددًا غير مدعوم لهذا الـProfile")
         }
+        preflight("تثبيت ترددات 4G") { it.lteBandControl }?.let { return it }
         return restoreLteMask(BandEncoding.lteMask(bands), successMessage = "تم تثبيت ترددات 4G والتحقق من القناع")
     }
 
@@ -166,13 +171,18 @@ class ZteRouterClient(routerAddress: String) {
         if (bands.isEmpty() || !profile.capabilities.supportedNrBands.containsAll(bands)) {
             return OperationResult(false, false, "اختيار 5G يحتوي ترددًا غير مدعوم لهذا الـProfile")
         }
+        preflight("تثبيت ترددات 5G") { it.nrBandControl }?.let { return it }
         return restoreNrMask(BandEncoding.nrMask(bands), expectedBands = bands, successMessage = "تم تثبيت ترددات 5G والتحقق منها")
     }
 
     suspend fun setCellLock(pci: Int, earfcn: Int): OperationResult {
         if (!profile.capabilities.supportsCellLock) return unsupported("تثبيت الخلية")
         if (pci !in 0..503 || earfcn <= 0) return OperationResult(false, false, "PCI LTE يجب أن يكون 0..503 وEARFCN أكبر من صفر")
+        preflight("تثبيت الخلية") { it.cellLock }?.let { return it }
+        return setCellLockInternal(pci, earfcn)
+    }
 
+    private suspend fun setCellLockInternal(pci: Int, earfcn: Int): OperationResult {
         val raw = writeWithAd(
             goformId = "LTE_LOCK_CELL_SET",
             values = mapOf(
@@ -201,6 +211,11 @@ class ZteRouterClient(routerAddress: String) {
      */
     suspend fun clearCellLock(): OperationResult {
         if (!profile.capabilities.supportsCellLock) return unsupported("إزالة تثبيت الخلية")
+        preflight("إزالة تثبيت الخلية") { it.cellLock }?.let { return it }
+        return clearCellLockInternal()
+    }
+
+    private suspend fun clearCellLockInternal(): OperationResult {
         val raw = writeWithAd(
             goformId = "LTE_LOCK_CELL_SET",
             values = mapOf("lte_pci_lock" to "", "lte_earfcn_lock" to "")
@@ -221,17 +236,38 @@ class ZteRouterClient(routerAddress: String) {
 
     suspend fun setNetworkMode(mode: String): OperationResult {
         if (mode !in NETWORK_MODES) return OperationResult(false, false, "وضع شبكة غير معروف")
+        preflight("تغيير وضع الشبكة") { it.networkMode }?.let { return it }
         return setNetworkModeRaw(mode)
     }
 
     suspend fun setAntennaState(state: Int): OperationResult {
         if (!profile.capabilities.supportsAntennaControl) return unsupported("التحكم بالهوائي")
         if (state !in 1..3) return OperationResult(false, false, "حالة الهوائي يجب أن تكون 1 أو 2 أو 3")
-        val raw = writeWithAd(
-            goformId = "BSP_ANTENNA_STATE_SET",
-            values = mapOf("antenna_name" to "6", "state" to state.toString())
+        return OperationResult(
+            success = false,
+            verified = false,
+            message = "تم إيقاف أمر الهوائي: هذا الـProfile يعرف الأمر لكن لا يوجد read-back موثوق يثبت النتيجة أو يسمح بالرجوع الآمن"
         )
-        return OperationResult(commandAccepted(raw), false, if (commandAccepted(raw)) "تم إرسال إعداد الهوائي؛ لا يوجد read-back موثوق لهذا الـFirmware" else "رفض الراوتر إعداد الهوائي", raw)
+    }
+
+    private suspend fun preflight(
+        feature: String,
+        selector: (RuntimeCapabilityReport) -> RuntimeCapabilityEvidence
+    ): OperationResult? {
+        val report = runCatching { readRuntimeCapabilities() }.getOrElse {
+            return OperationResult(
+                false,
+                false,
+                "تم إيقاف $feature: تعذر تنفيذ capability probe القراءة فقط (${it.message.orEmpty()})"
+            )
+        }
+        val evidence = selector(report)
+        if (evidence.canAttemptWrite) return null
+        return OperationResult(
+            success = false,
+            verified = false,
+            message = "تم إيقاف $feature قبل إرسال أي أمر: ${evidence.reason}"
+        )
     }
 
     private suspend fun restoreLteMask(
