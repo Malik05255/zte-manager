@@ -84,10 +84,10 @@ class ArabicUiPolicyTest {
 
     companion object {
         private val USER_FACING_PATTERNS = listOf(
-            Regex("""Text\(\s*\"([^\"]+)\"""),
-            Regex("""Toast\.makeText\([^,]+,\s*\"([^\"]+)\"""),
-            Regex("""createChooser\([^,]+,\s*\"([^\"]+)\"""),
-            Regex("""newPlainText\(\s*\"([^\"]+)\"""")
+            Regex("Text\\(\\s*\"([^\"]+)\""),
+            Regex("Toast\\.makeText\\([^,]+,\\s*\"([^\"]+)\""),
+            Regex("createChooser\\([^,]+,\\s*\"([^\"]+)\""),
+            Regex("newPlainText\\(\\s*\"([^\"]+)\"")
         )
 
         private val TECHNICAL_TOKENS = listOf(
