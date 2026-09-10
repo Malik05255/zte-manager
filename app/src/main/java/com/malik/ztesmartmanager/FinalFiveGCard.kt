@@ -154,6 +154,13 @@ fun FinalFiveGPrimaryCard(
                 }
             }
 
+            Spacer(Modifier.size(if (compact) 6.dp else 8.dp))
+            CarrierMatrixCard(
+                snapshot = snapshot,
+                compact = compact,
+                modifier = Modifier.fillMaxWidth()
+            )
+
             Spacer(Modifier.size(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Button(
