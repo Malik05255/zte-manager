@@ -23,6 +23,7 @@ object Mc801aProfile : RouterProfile {
         "hardware_version", "web_version", "wa_inner_version", "cr_version", "RD",
 
         "network_type", "current_network", "current_network_mode", "nRat",
+        "net_select", "net_select_mode", "m_netselect_save", "m_netselect_contents", "BearerPreference",
         "network_provider", "network_provider_fullname", "rmcc", "rmnc", "mdm_mcc", "mdm_mnc",
         "signalbar", "modem_main_state", "ppp_status",
 
