@@ -61,9 +61,13 @@ import com.malik.ztesmartmanager.core.smart.OptimizationGoal
 import com.malik.ztesmartmanager.core.smart.PlacementGuidance
 import com.malik.ztesmartmanager.core.smart.PlacementReading
 import com.malik.ztesmartmanager.core.smart.SmartOptimizationReport
+import com.malik.ztesmartmanager.core.tower.CellConfidence
 import com.malik.ztesmartmanager.core.tower.NearbyCell
 import com.malik.ztesmartmanager.core.tower.TowerGuardStatus
+import com.malik.ztesmartmanager.core.tower.TowerLockEngine
 import com.malik.ztesmartmanager.core.tower.TowerMatch
+import com.malik.ztesmartmanager.core.tower.TowerRecommendationDecision
+import com.malik.ztesmartmanager.core.tower.TowerRecommendationEngine
 import com.malik.ztesmartmanager.core.tower.TowerTarget
 import kotlinx.coroutines.delay
 import kotlin.math.PI
@@ -710,6 +714,10 @@ private fun FinalTowerPanel(
     onClearLock: () -> Unit,
     onGuardChange: (Boolean) -> Unit
 ) {
+    val recommendation = remember(cells, snapshot.pci, snapshot.earfcn) {
+        TowerRecommendationEngine.recommend(cells, snapshot.pci, snapshot.earfcn)
+    }
+
     FinalCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(15.dp)) {
             Text("الأبراج والخلايا", color = FinalInk, fontSize = 15.sp, fontWeight = FontWeight.Bold)
@@ -720,7 +728,7 @@ private fun FinalTowerPanel(
             Spacer(Modifier.height(9.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FinalOutlined(if (scanBusy) "جاري المسح" else "مسح الخلايا", !scanBusy && !busy, Modifier.weight(1f), onScan)
-                FinalOutlined("تثبيت الحالية", !busy && snapshot.pci != null && snapshot.earfcn != null, Modifier.weight(1f), onLockCurrent)
+                FinalOutlined("تحقق ثم ثبّت الحالية", !busy && snapshot.pci != null && snapshot.earfcn != null, Modifier.weight(1f), onLockCurrent)
             }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -751,8 +759,40 @@ private fun FinalTowerPanel(
             if (cells.isEmpty()) {
                 Text("اضغط «مسح الخلايا». إذا لم يعرض Firmware الجيران ستبقى القائمة فارغة بدل اختلاق نتائج.", color = FinalMuted, fontSize = 8.sp)
             } else {
+                val recommendationColor = when (recommendation.decision) {
+                    TowerRecommendationDecision.RECOMMEND_CANDIDATE -> FinalGood
+                    TowerRecommendationDecision.KEEP_CURRENT -> FinalGoldDeep
+                    TowerRecommendationDecision.INSUFFICIENT_EVIDENCE -> FinalMuted
+                }
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(recommendationColor.copy(alpha = 0.09f))
+                        .border(1.dp, recommendationColor.copy(alpha = 0.28f), RoundedCornerShape(18.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp)
+                ) {
+                    Column {
+                        Text(
+                            when (recommendation.decision) {
+                                TowerRecommendationDecision.RECOMMEND_CANDIDATE -> "توصية موثّقة"
+                                TowerRecommendationDecision.KEEP_CURRENT -> "الأفضل إبقاء الحالية"
+                                TowerRecommendationDecision.INSUFFICIENT_EVIDENCE -> "لا توجد توصية حاسمة"
+                            },
+                            color = recommendationColor,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(recommendation.reason, color = FinalMuted, fontSize = 7.sp)
+                    }
+                }
+                Spacer(Modifier.height(7.dp))
+
                 cells.take(12).forEachIndexed { index, cell ->
-                    FinalCellRow(index + 1, cell, busy, onLockCell)
+                    val isCurrent = cell.rat == "LTE" && cell.pci == snapshot.pci && cell.arfcn == snapshot.earfcn
+                    val isRecommended = recommendation.decision == TowerRecommendationDecision.RECOMMEND_CANDIDATE &&
+                        TowerRecommendationEngine.sameIdentity(cell, recommendation.candidate)
+                    FinalCellRow(index + 1, cell, isCurrent, isRecommended, busy, onLockCell)
                 }
             }
         }
@@ -760,38 +800,90 @@ private fun FinalTowerPanel(
 }
 
 @Composable
-private fun FinalCellRow(index: Int, cell: NearbyCell, busy: Boolean, onLock: (NearbyCell) -> Unit) {
+private fun FinalCellRow(
+    index: Int,
+    cell: NearbyCell,
+    isCurrent: Boolean,
+    isRecommended: Boolean,
+    busy: Boolean,
+    onLock: (NearbyCell) -> Unit
+) {
     val canLock = cell.rat == "LTE" && cell.pci != null && cell.arfcn != null
+    val confidence = when (cell.confidence) {
+        CellConfidence.HIGH -> "ثقة عالية"
+        CellConfidence.MEDIUM -> "ثقة متوسطة"
+        CellConfidence.LOW -> "ثقة منخفضة"
+        null -> "الثقة غير مكتملة"
+    }
+    val evidence = cell.evidenceScore?.let { "دليل $it/100" } ?: "دليل RF غير مكتمل"
+    val presence = if (cell.samplesTotal > 1) {
+        "ظهور ${cell.samplesSeen}/${cell.samplesTotal} • ${cell.presencePercent}%"
+    } else {
+        "قراءة واحدة"
+    }
+    val stability = cell.stabilityScore?.let { " • ثبات $it%" }.orEmpty()
+
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(vertical = 5.dp),
+            .padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            Modifier.size(28.dp).clip(CircleShape).background(FinalGold.copy(alpha = 0.16f)),
+            Modifier
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(
+                    when {
+                        isRecommended -> FinalGood.copy(alpha = 0.16f)
+                        isCurrent -> FinalGold.copy(alpha = 0.22f)
+                        else -> FinalGold.copy(alpha = 0.12f)
+                    }
+                ),
             contentAlignment = Alignment.Center
         ) {
             Text(index.toString(), color = FinalGoldDeep, fontSize = 8.sp, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.size(7.dp))
         Column(Modifier.weight(1f)) {
+            val flags = buildList {
+                if (isCurrent) add("الحالية")
+                if (isRecommended) add("موصى بها")
+            }.joinToString(" • ")
             Text(
-                "${cell.rat} ${cell.band ?: ""} • PCI ${cell.pci ?: "—"} • ${if (cell.rat == "NR") "ARFCN" else "EARFCN"} ${cell.arfcn ?: "—"}",
-                color = FinalInk, fontSize = 8.sp, fontWeight = FontWeight.Bold, maxLines = 1
+                buildString {
+                    append("${cell.rat} ${cell.band ?: ""} • PCI ${cell.pci ?: "—"} • ${if (cell.rat == "NR") "ARFCN" else "EARFCN"} ${cell.arfcn ?: "—"}")
+                    if (flags.isNotBlank()) append(" • $flags")
+                },
+                color = if (isRecommended) FinalGood else FinalInk,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1
             )
             Text(
-                "RSRP ${cell.rsrp?.let(::finalNumber) ?: "—"} dBm • RSRQ ${cell.rsrq?.let(::finalNumber) ?: "—"} dB",
-                color = FinalMuted, fontSize = 7.sp
+                "RSRP ${cell.rsrp?.let(::finalNumber) ?: "—"} dBm • RSRQ ${cell.rsrq?.let(::finalNumber) ?: "—"} dB • SINR ${cell.sinr?.let(::finalNumber) ?: "—"} dB",
+                color = FinalMuted,
+                fontSize = 7.sp,
+                maxLines = 1
+            )
+            Text(
+                "$evidence • $presence$stability • $confidence",
+                color = when (cell.confidence) {
+                    CellConfidence.HIGH -> FinalGood
+                    CellConfidence.LOW -> FinalWarn
+                    else -> FinalMuted
+                },
+                fontSize = 7.sp,
+                maxLines = 1
             )
         }
         OutlinedButton(
             onClick = { onLock(cell) },
             enabled = canLock && !busy,
             shape = RoundedCornerShape(50),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
+            contentPadding = PaddingValues(horizontal = 9.dp, vertical = 2.dp)
         ) {
-            Text(if (cell.rat == "LTE") "تثبيت" else "قراءة", color = FinalInk, fontSize = 7.sp)
+            Text(if (cell.rat == "LTE") "تحقق ثم ثبّت" else "قراءة فقط", color = FinalInk, fontSize = 7.sp, maxLines = 1)
         }
     }
 }
@@ -806,7 +898,7 @@ private fun FinalNetworkPanel(
     FinalCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(15.dp)) {
             Text("وضع الشبكة", color = FinalInk, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-            Text("الوضع المسموح لا يساوي الاتصال الفعلي؛ حالة الاتصال الحية تبقى في البطاقة الذهبية.", color = FinalMuted, fontSize = 8.sp)
+            Text("الوضع المسموح لا يساوي الاتصال الفعلي. نجاح التغيير لا يُعلن الآن إلا بعد read-back مطابق لـ BearerPreference.", color = FinalMuted, fontSize = 8.sp)
             Spacer(Modifier.height(8.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 FinalOutlined("4G فقط", !busy, Modifier.weight(1f)) { onMode("Only_LTE") }
@@ -920,7 +1012,7 @@ private fun FinalDiagnostics(snapshot: RouterSnapshot) {
         "lte_multi_ca_scell_info", "wan_active_band", "wan_active_channel", "lte_pci",
         "nr5g_action_band", "nr5g_action_nsa_band", "nr5g_action_channel", "nr5g_pci",
         "Z5g_rsrp", "Z5g_SINR", "lte_band_lock", "nr5g_sa_band_lock", "nr5g_nsa_band_lock",
-        "lte_pci_lock", "lte_earfcn_lock"
+        "lte_pci_lock", "lte_earfcn_lock", "BearerPreference"
     )
     FinalCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(15.dp)) {
