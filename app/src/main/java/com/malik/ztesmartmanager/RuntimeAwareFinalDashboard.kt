@@ -162,65 +162,67 @@ fun RuntimeAwareFinalDashboard(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
 
-    ArabicHaiDashboardV3(
-        snapshot = snapshot,
-        capabilities = effectiveCapabilities,
-        runtime = runtime,
-        traffic = traffic,
-        thermal = thermal,
-        telemetrySamples = telemetrySamples,
-        stability = stability,
-        status = status,
-        operationMessage = operationMessage,
-        placementMode = placementMode,
-        placementReading = placementReading,
-        smartMode = smartMode,
-        smartGoal = smartGoal,
-        smartBusy = smartBusy,
-        smartReport = smartReport,
-        selectedLte = selectedLte,
-        selectedNr = selectedNr,
-        controlBusy = controlBusy,
-        speedBusy = speedBusy,
-        lastPerformance = lastPerformance,
-        safetyBackupAvailable = safetyBackupAvailable,
-        nearbyCells = nearbyCells,
-        scanBusy = scanBusy,
-        towerTarget = towerTarget,
-        towerGuardEnabled = towerGuardEnabled,
-        towerGuardStatus = towerGuardStatus,
-        onDisconnect = onDisconnect,
-        onSpeedTest = onSpeedTest,
-        onRefreshSnapshot = onRefreshSnapshot,
-        onPlacementToggle = onPlacementToggle,
-        onSmartModeChange = { enabled ->
-            if (!enabled || !blocked(RuntimeAction.LTE_BAND_WRITE)) onSmartModeChange(enabled)
-        },
-        onSmartGoalChange = onSmartGoalChange,
-        onOptimizeNow = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onOptimizeNow() },
-        onLteToggle = onLteToggle,
-        onNrToggle = onNrToggle,
-        onApplyLte = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onApplyLte() },
-        onApplyNr = {
-            if (!blocked(RuntimeAction.NR_BAND_WRITE) && nrWritePreflightPassed()) onApplyNr()
-        },
-        onSetNetworkMode = { mode ->
-            if (!blocked(RuntimeAction.NETWORK_MODE_WRITE)) onSetNetworkMode(mode)
-        },
-        onAntennaState = { state ->
-            if (!blocked(RuntimeAction.ANTENNA_WRITE)) onAntennaState(state)
-        },
-        onScanCells = { if (!blocked(RuntimeAction.NEIGHBOR_SCAN)) onScanCells() },
-        onLockCurrentCell = { if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockCurrentCell() },
-        onLockNearbyCell = { cell ->
-            if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockNearbyCell(cell)
-        },
-        onClearCellLock = { if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onClearCellLock() },
-        onTowerGuardChange = { enabled ->
-            if (!enabled || !blocked(RuntimeAction.CELL_LOCK_WRITE)) onTowerGuardChange(enabled)
-        },
-        onRestoreSafetyBackup = onRestoreSafetyBackup,
-        onCopyDiagnostics = ::copySupportBundle,
-        onShareDiagnostics = ::shareSupportBundle
-    )
+    HaiUiScaleProvider {
+        ArabicHaiDashboardV3(
+            snapshot = snapshot,
+            capabilities = effectiveCapabilities,
+            runtime = runtime,
+            traffic = traffic,
+            thermal = thermal,
+            telemetrySamples = telemetrySamples,
+            stability = stability,
+            status = status,
+            operationMessage = operationMessage,
+            placementMode = placementMode,
+            placementReading = placementReading,
+            smartMode = smartMode,
+            smartGoal = smartGoal,
+            smartBusy = smartBusy,
+            smartReport = smartReport,
+            selectedLte = selectedLte,
+            selectedNr = selectedNr,
+            controlBusy = controlBusy,
+            speedBusy = speedBusy,
+            lastPerformance = lastPerformance,
+            safetyBackupAvailable = safetyBackupAvailable,
+            nearbyCells = nearbyCells,
+            scanBusy = scanBusy,
+            towerTarget = towerTarget,
+            towerGuardEnabled = towerGuardEnabled,
+            towerGuardStatus = towerGuardStatus,
+            onDisconnect = onDisconnect,
+            onSpeedTest = onSpeedTest,
+            onRefreshSnapshot = onRefreshSnapshot,
+            onPlacementToggle = onPlacementToggle,
+            onSmartModeChange = { enabled ->
+                if (!enabled || !blocked(RuntimeAction.LTE_BAND_WRITE)) onSmartModeChange(enabled)
+            },
+            onSmartGoalChange = onSmartGoalChange,
+            onOptimizeNow = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onOptimizeNow() },
+            onLteToggle = onLteToggle,
+            onNrToggle = onNrToggle,
+            onApplyLte = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onApplyLte() },
+            onApplyNr = {
+                if (!blocked(RuntimeAction.NR_BAND_WRITE) && nrWritePreflightPassed()) onApplyNr()
+            },
+            onSetNetworkMode = { mode ->
+                if (!blocked(RuntimeAction.NETWORK_MODE_WRITE)) onSetNetworkMode(mode)
+            },
+            onAntennaState = { state ->
+                if (!blocked(RuntimeAction.ANTENNA_WRITE)) onAntennaState(state)
+            },
+            onScanCells = { if (!blocked(RuntimeAction.NEIGHBOR_SCAN)) onScanCells() },
+            onLockCurrentCell = { if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockCurrentCell() },
+            onLockNearbyCell = { cell ->
+                if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockNearbyCell(cell)
+            },
+            onClearCellLock = { if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onClearCellLock() },
+            onTowerGuardChange = { enabled ->
+                if (!enabled || !blocked(RuntimeAction.CELL_LOCK_WRITE)) onTowerGuardChange(enabled)
+            },
+            onRestoreSafetyBackup = onRestoreSafetyBackup,
+            onCopyDiagnostics = ::copySupportBundle,
+            onShareDiagnostics = ::shareSupportBundle
+        )
+    }
 }
