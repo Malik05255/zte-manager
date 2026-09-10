@@ -50,6 +50,7 @@ class ArabicUiPolicyTest {
                 }
             }
 
+        violations.forEach { println("ARABIC_UI_VIOLATION: $it") }
         assertTrue(
             "وجدت نصوص واجهة إنجليزية غير معرّبة:\n${violations.joinToString("\n")}",
             violations.isEmpty()
