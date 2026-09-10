@@ -35,6 +35,9 @@ jobs:
       - name: Run truth-first unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
 
+      - name: Run Android lint
+        run: gradle :app:lintDebug --stacktrace
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace
 
