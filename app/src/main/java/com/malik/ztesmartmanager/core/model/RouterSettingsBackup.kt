@@ -33,6 +33,46 @@ data class RouterSettingsBackup(
             lteEarfcnLock,
             bearerPreference
         ).any { it != null }
+
+    /** Exact LTE rollback is safe only when the router exposed a non-empty mask. */
+    val canRestoreLteBands: Boolean
+        get() = lteBandLock?.let { !isEmptyOrZero(it) } == true
+
+    /**
+     * The legacy MC801A command restores one shared NR mask. If SA and NSA are
+     * exposed separately they must agree before we treat rollback as safe.
+     */
+    val canRestoreNrBands: Boolean
+        get() {
+            nrBandLock?.let { return !isEmptyOrZero(it) }
+            val split = listOfNotNull(nrSaBandLock, nrNsaBandLock)
+            if (split.isEmpty() || split.any(::isEmptyOrZero)) return false
+            return split.map(::normalizeBandList).distinct().size == 1
+        }
+
+    val hasCompleteCellLockState: Boolean
+        get() = ltePciLock != null && lteEarfcnLock != null
+
+    val cellWasUnlocked: Boolean
+        get() = hasCompleteCellLockState && isEmptyOrZero(ltePciLock.orEmpty()) && isEmptyOrZero(lteEarfcnLock.orEmpty())
+
+    val canRestoreNetworkMode: Boolean
+        get() = !bearerPreference.isNullOrBlank()
+
+    companion object {
+        private fun isEmptyOrZero(value: String): Boolean {
+            val normalized = value.trim().lowercase()
+            return normalized.isBlank() || normalized == "0" || normalized == "0x0"
+        }
+
+        private fun normalizeBandList(value: String): String = value
+            .replace("%2C", ",", ignoreCase = true)
+            .split(',', '+', ';', ' ')
+            .mapNotNull { Regex("\\d+").find(it)?.value?.toIntOrNull() }
+            .distinct()
+            .sorted()
+            .joinToString(",")
+    }
 }
 
 data class RouterRestoreStep(
