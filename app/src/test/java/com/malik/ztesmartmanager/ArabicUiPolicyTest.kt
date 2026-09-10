@@ -17,10 +17,15 @@ class ArabicUiPolicyTest {
     fun productionShell_isArabicAndForcesRtl() {
         val dashboard = source("ArabicHaiDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
+        val activity = source("FinalMainActivity.kt").readText()
 
         assertTrue(
             "واجهة الإنتاج يجب أن تفرض RTL حتى لو كانت لغة الهاتف مختلفة",
             dashboard.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
+        )
+        assertTrue(
+            "يجب فرض RTL على التطبيق كاملًا بما فيه شاشة الدخول",
+            activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
             "غلاف الأمان يجب أن يستخدم الواجهة العربية",
@@ -104,6 +109,7 @@ class ArabicUiPolicyTest {
             "CarrierMatrixCard.kt",
             "HomeActivity.kt",
             "MainActivity.kt",
+            "ReferenceDashboard.kt",
             "ReferenceMainActivity.kt"
         )
     }
