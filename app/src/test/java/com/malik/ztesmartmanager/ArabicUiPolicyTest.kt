@@ -63,6 +63,7 @@ class ArabicUiPolicyTest {
         assertTrue(isArabicOrTechnicalOnly("5G NSA"))
         assertTrue(isArabicOrTechnicalOnly("RSRP"))
         assertTrue(isArabicOrTechnicalOnly("ZTE Smart HAI"))
+        assertTrue(isArabicOrTechnicalOnly("Cell 12345"))
         assertTrue(isArabicOrTechnicalOnly("A"))
         assertFalse(isArabicOrTechnicalOnly("Speed Test"))
         assertFalse(isArabicOrTechnicalOnly("Network Stat"))
@@ -99,7 +100,7 @@ class ArabicUiPolicyTest {
         private val TECHNICAL_TOKENS = listOf(
             "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
-            "A"
+            "Cell", "A"
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
