@@ -1,5 +1,9 @@
 package com.malik.ztesmartmanager
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,11 +26,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetryHistory
+import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetrySample
+import com.malik.ztesmartmanager.core.diagnostics.SupportBundleBuilder
 import com.malik.ztesmartmanager.core.model.RouterCapabilities
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
 import com.malik.ztesmartmanager.core.model.RuntimeCapabilityReport
@@ -58,7 +66,6 @@ private val RuntimeBarMuted = Color(0xFF776E63)
 private val RuntimeBarGoldDeep = Color(0xFF876126)
 private val RuntimeBarGood = Color(0xFF567D5B)
 private val RuntimeBarWarn = Color(0xFFA96432)
-private val RuntimeBarLine = Color(0xFFD2C8B9)
 
 /**
  * Runtime-capability shell around the premium dashboard.
@@ -114,6 +121,40 @@ fun RuntimeAwareFinalDashboard(
     }
     var detailsExpanded by rememberSaveable { mutableStateOf(false) }
 
+    val telemetryHistory = remember { SafeTelemetryHistory(capacity = 30) }
+    var telemetrySamples by remember { mutableStateOf<List<SafeTelemetrySample>>(emptyList()) }
+    LaunchedEffect(snapshot) {
+        snapshot?.let {
+            telemetryHistory.add(it)
+            telemetrySamples = telemetryHistory.snapshot()
+        }
+    }
+
+    val supportBundle = remember(snapshot, runtime, telemetrySamples, capabilities.modelFamily) {
+        SupportBundleBuilder.build(
+            appVersion = BuildConfig.VERSION_NAME,
+            modelFamily = capabilities.modelFamily,
+            snapshot = snapshot,
+            runtime = runtime,
+            history = telemetrySamples
+        )
+    }
+
+    fun copySupportBundle() {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("ZTE Manager diagnostics", supportBundle))
+        Toast.makeText(context, "تم نسخ تقرير التشخيص الآمن", Toast.LENGTH_SHORT).show()
+    }
+
+    fun shareSupportBundle() {
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, "ZTE Manager ${BuildConfig.VERSION_NAME} diagnostics")
+            putExtra(Intent.EXTRA_TEXT, supportBundle)
+        }
+        context.startActivity(Intent.createChooser(intent, "مشاركة تقرير التشخيص"))
+    }
+
     fun blocked(action: RuntimeAction): Boolean {
         val report = runtime ?: run {
             Toast.makeText(context, "لم يكتمل فحص Firmware بعد؛ لم يتم إرسال أي أمر", Toast.LENGTH_SHORT).show()
@@ -145,6 +186,9 @@ fun RuntimeAwareFinalDashboard(
         if (detailsExpanded && runtime != null) {
             RuntimeCapabilityDetails(
                 report = runtime,
+                historyCount = telemetrySamples.size,
+                onCopyBundle = ::copySupportBundle,
+                onShareBundle = ::shareSupportBundle,
                 modifier = Modifier.fillMaxWidth()
             )
         }
@@ -267,7 +311,13 @@ private fun RuntimeCapabilityBar(
 }
 
 @Composable
-private fun RuntimeCapabilityDetails(report: RuntimeCapabilityReport, modifier: Modifier = Modifier) {
+private fun RuntimeCapabilityDetails(
+    report: RuntimeCapabilityReport,
+    historyCount: Int,
+    onCopyBundle: () -> Unit,
+    onShareBundle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     val details = remember(report) { RuntimeCapabilityDetailsPresenter.from(report) }
     Card(
         modifier = modifier.padding(horizontal = 10.dp, vertical = 1.dp),
@@ -282,11 +332,16 @@ private fun RuntimeCapabilityDetails(report: RuntimeCapabilityReport, modifier: 
                 fontSize = 7.sp
             )
             Text(
-                "المعروض هنا أسماء حقول الإثبات فقط، وليس قيمها. لا تُعرض كلمة المرور أو auth/token أو IMSI/IMEI/ICCID/PIN/PUK.",
+                "تقرير الدعم لا ينسخ raw كاملًا؛ يحتوي قياسات الراديو المنظمة ودليل الـFirmware وأقصى حد 30 قراءة من الجلسة الحالية.",
                 color = RuntimeBarMuted,
                 fontSize = 7.sp
             )
             Spacer(Modifier.size(5.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                RuntimeActionButton("نسخ التقرير • $historyCount قراءة", Modifier.weight(1f), onCopyBundle)
+                RuntimeActionButton("مشاركة التقرير", Modifier.weight(1f), onShareBundle)
+            }
+            Spacer(Modifier.size(6.dp))
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -299,6 +354,19 @@ private fun RuntimeCapabilityDetails(report: RuntimeCapabilityReport, modifier: 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RuntimeActionButton(text: String, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .border(1.dp, RuntimeBarGoldDeep.copy(alpha = 0.40f), RoundedCornerShape(50))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = RuntimeBarGoldDeep, fontSize = 7.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
     }
 }
 
