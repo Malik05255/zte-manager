@@ -42,9 +42,8 @@ data class NearbyCell(
 /**
  * Verified tower/cell control.
  *
- * The legacy MC801A command can lock only PCI + EARFCN. Cell ID/eNodeB are retained as
- * observational identity evidence, never presented as writable keys when the firmware cannot
- * write them. Guard repair requires repeated drift plus a cooldown to avoid ping-pong.
+ * A write acknowledgement is not proof of a lock. We require the router to read back the exact
+ * lock keys before the app is allowed to say that a tower/cell is locked or enable Tower Guard.
  */
 class TowerLockEngine(
     private val client: ZteRouterClient
@@ -70,15 +69,11 @@ class TowerLockEngine(
         if (pci == null || earfcn == null) return TowerMatch.UNKNOWN
         if (pci != target.pci || earfcn != target.earfcn) return TowerMatch.DRIFTED
 
-        val targetCellId = target.cellId
-        val currentCellId = snapshot.cellId
-        if (targetCellId != null && currentCellId != null && targetCellId != currentCellId) {
+        if (target.cellId != null && snapshot.cellId != null && target.cellId != snapshot.cellId) {
             return TowerMatch.RADIO_MATCH_ID_CHANGED
         }
-
-        val targetEnodeb = target.enodebId
         val currentEnodeb = snapshot.raw["enodeb_id"]?.trim()?.takeIf { it.isNotBlank() && it != "--" }
-        if (targetEnodeb != null && currentEnodeb != null && targetEnodeb != currentEnodeb) {
+        if (target.enodebId != null && currentEnodeb != null && target.enodebId != currentEnodeb) {
             return TowerMatch.RADIO_MATCH_ID_CHANGED
         }
         return TowerMatch.MATCHED
@@ -94,6 +89,15 @@ class TowerLockEngine(
         if (!operation.success) {
             return TowerGuardStatus(target, TowerMatch.UNKNOWN, 0, false, operation.message)
         }
+        if (!operation.verified) {
+            return TowerGuardStatus(
+                target,
+                TowerMatch.UNKNOWN,
+                0,
+                false,
+                "قبل الراوتر أمر القفل، لكن لم يعطِ read-back مطابقًا؛ لذلك لن يعتبره التطبيق قفلًا مؤكدًا ولن يشغّل Tower Guard"
+            )
+        }
 
         delay(1_200)
         val after = runCatching { client.readSnapshot() }.getOrNull()
@@ -105,10 +109,10 @@ class TowerLockEngine(
             consecutiveDriftSamples = 0,
             repaired = false,
             message = when (match) {
-                TowerMatch.MATCHED -> "تم تثبيت الخلية والتحقق من بقاء الراوتر على الهدف"
-                TowerMatch.RADIO_MATCH_ID_CHANGED -> "PCI/EARFCN ثابتان لكن هوية Cell ID/eNodeB تغيّرت؛ لن يدّعي التطبيق أن البرج الفيزيائي ثابت"
-                TowerMatch.DRIFTED -> "قبل الراوتر أمر القفل لكنه لم يبقَ على الخلية المطلوبة"
-                TowerMatch.UNKNOWN -> "قبل الراوتر الأمر، لكن التحقق اللاحق غير كافٍ"
+                TowerMatch.MATCHED -> "تم حفظ القفل وقراءته مرة أخرى، والخلية الحالية تطابق الهدف"
+                TowerMatch.RADIO_MATCH_ID_CHANGED -> "القفل محفوظ، لكن Cell ID/eNodeB لا يطابق الهوية الأصلية؛ لن يدّعي التطبيق ثبات البرج الفيزيائي"
+                TowerMatch.DRIFTED -> "القفل محفوظ في الراوتر لكن الخلية الحية لا تطابق الهدف"
+                TowerMatch.UNKNOWN -> "القفل محفوظ، لكن بيانات الخلية الحية غير كافية للتحقق"
             }
         )
     }
@@ -119,7 +123,6 @@ class TowerLockEngine(
             consecutiveDriftSamples = 0
             return TowerGuardStatus(target, match, 0, false, "الخلية المستهدفة موثقة وثابتة")
         }
-
         if (match == TowerMatch.UNKNOWN) {
             return TowerGuardStatus(target, match, consecutiveDriftSamples, false, "تعذر التحقق مؤقتًا؛ لن يرسل التطبيق أمرًا عشوائيًا")
         }
@@ -140,13 +143,17 @@ class TowerLockEngine(
         val operation = runCatching { client.setCellLock(target.pci, target.earfcn) }.getOrNull()
         lastRepairAtMs = now
         consecutiveDriftSamples = 0
-        val repaired = operation?.success == true
+        val repaired = operation?.success == true && operation.verified
         return TowerGuardStatus(
             target,
             match,
             0,
             repaired,
-            if (repaired) "أعاد Tower Guard تطبيق القفل الموثق" else "تعذر على Tower Guard إعادة تطبيق القفل"
+            when {
+                repaired -> "أعاد Tower Guard القفل وتحقق من read-back"
+                operation?.success == true -> "قبل الراوتر إعادة القفل لكن لم يؤكدها؛ لا تُحسب كإصلاح ناجح"
+                else -> "تعذر على Tower Guard إعادة تطبيق القفل"
+            }
         )
     }
 
