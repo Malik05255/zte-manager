@@ -225,7 +225,7 @@ fun PremiumDashboard(
                         busy = smartBusy,
                         report = smartReport,
                         onEnabledChange = onSmartModeChange,
-                        onGoalChange = onGoalChange,
+                        onGoalChange = onSmartGoalChange,
                         onOptimizeNow = onOptimizeNow
                     )
                 }
