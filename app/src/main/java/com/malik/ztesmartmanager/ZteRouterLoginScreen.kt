@@ -90,9 +90,11 @@ fun ZteRouterLoginScreen(
     var credentialSaveFailed by remember { mutableStateOf(false) }
     val isError = status.startsWith("تعذر") || status.contains("رفض") || status.contains("خطأ")
 
-    // The app default is 192.168.0.1, but many routers use another private gateway such as
-    // 192.168.1.1. Adopt Android's active Wi-Fi gateway only before the user edits the address.
-    LaunchedEffect(Unit) {
+    // Adopt the active Wi-Fi gateway only while the login form is still untouched and no saved
+    // credential has been loaded. Including the credential state in the effect keys cancels an
+    // in-flight detection if restored credentials arrive first, preventing a gateway race.
+    LaunchedEffect(routerAddress, password, rememberPassword, userEditedAddress) {
+        if (userEditedAddress || rememberPassword || password.isNotBlank()) return@LaunchedEffect
         val detected = withContext(Dispatchers.IO) { AndroidRouterGatewayDetector.detect(context) }
         if (RouterLoginGatewayPolicy.shouldAdoptDetectedGateway(
                 currentAddress = routerAddress,
