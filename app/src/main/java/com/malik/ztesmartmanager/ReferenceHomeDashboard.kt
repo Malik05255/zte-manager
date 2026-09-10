@@ -81,6 +81,7 @@ fun ReferenceHomeDashboard(
     speedBusy: Boolean,
     controlBusy: Boolean,
     smartBusy: Boolean,
+    tallLayout: Boolean,
     onDisconnect: () -> Unit,
     onSpeedTest: () -> Unit,
     onSetNetworkMode: (String) -> Unit,
@@ -97,6 +98,9 @@ fun ReferenceHomeDashboard(
         val scaleX = maxWidth.value / designWidth.value
         val uiScale = scaleX
         val designHeight = (maxHeight.value / uiScale).dp
+        // HONOR 200 is a tall 2664x1200-class display. Use the extra vertical room for
+        // the actual dashboard cards instead of leaving a large dead strip above navigation.
+        val tallLayout = maxHeight.value / maxWidth.value >= 2.0f
 
         Box(
             modifier = Modifier
@@ -113,6 +117,7 @@ fun ReferenceHomeDashboard(
                 speedBusy = speedBusy,
                 controlBusy = controlBusy,
                 smartBusy = smartBusy,
+                tallLayout = tallLayout,
                 onDisconnect = onDisconnect,
                 onSpeedTest = onSpeedTest,
                 onSetNetworkMode = onSetNetworkMode,
@@ -161,16 +166,16 @@ private fun ReferenceDashboardContent(
 
         Spacer(Modifier.height(5.dp))
 
-        ReferenceNetworkHeroCard(snapshot)
+        ReferenceNetworkHeroCard(snapshot, tallLayout)
 
         Spacer(Modifier.height(5.dp))
 
-        ReferenceSignalMetricsRow(snapshot)
+        ReferenceSignalMetricsRow(snapshot, tallLayout)
 
         Spacer(Modifier.height(5.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth().height(131.dp),
+            modifier = Modifier.fillMaxWidth().height(if (tallLayout) 150.dp else 131.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             ReferenceSpeedCard(
@@ -190,7 +195,7 @@ private fun ReferenceDashboardContent(
         Spacer(Modifier.height(5.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth().height(118.dp),
+            modifier = Modifier.fillMaxWidth().height(if (tallLayout) 136.dp else 118.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             ReferenceTowerCard(
@@ -208,7 +213,7 @@ private fun ReferenceDashboardContent(
         Spacer(Modifier.height(5.dp))
 
         Row(
-            modifier = Modifier.fillMaxWidth().height(92.dp),
+            modifier = Modifier.fillMaxWidth().height(if (tallLayout) 112.dp else 92.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             ReferenceActiveBandsCard(
@@ -339,7 +344,7 @@ private fun ReferenceHeaderCircle(label: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ReferenceNetworkHeroCard(snapshot: RouterSnapshot) {
+private fun ReferenceNetworkHeroCard(snapshot: RouterSnapshot, tallLayout: Boolean) {
     val nrVerified = snapshot.raw["_zte_nr_active_verified"].equals("true", ignoreCase = true)
     val lteVerified = snapshot.raw["_zte_lte_active_verified"].equals("true", ignoreCase = true)
     val network = when {
@@ -359,14 +364,14 @@ private fun ReferenceNetworkHeroCard(snapshot: RouterSnapshot) {
     val caBands = if (caVerified || snapshot.caActive) bands else emptyList()
 
     Card(
-        modifier = Modifier.fillMaxWidth().height(151.dp),
+        modifier = Modifier.fillMaxWidth().height(if (tallLayout) 185.dp else 151.dp),
         shape = RefCardShape,
         colors = CardDefaults.cardColors(containerColor = RefSurface),
         elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
     ) {
         Row(modifier = Modifier.fillMaxSize()) {
             ReferenceRouterIllustration(
-                modifier = Modifier.fillMaxHeight().width(105.dp)
+                modifier = Modifier.fillMaxHeight().width(if (tallLayout) 118.dp else 105.dp)
             )
 
             Column(modifier = Modifier.weight(1f).padding(10.dp)) {
@@ -433,7 +438,7 @@ private fun ReferenceNetworkHeroCard(snapshot: RouterSnapshot) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(49.dp)
+                        .height(if (tallLayout) 60.dp else 49.dp)
                         .clip(RoundedCornerShape(15.dp))
                         .background(Color(0xFFFAFCFF))
                         .border(0.7.dp, RefBorder, RoundedCornerShape(15.dp))
@@ -529,8 +534,8 @@ private fun ReferenceRouterIllustration(modifier: Modifier = Modifier) {
                     style = Stroke(width = 2f)
                 )
             }
-            val routerW = size.width * .42f
-            val routerH = size.height * .60f
+            val routerW = size.width * .50f
+            val routerH = size.height * .68f
             val left = cx - routerW / 2
             val top = cy - routerH / 2
             drawRoundRect(
@@ -563,12 +568,12 @@ private fun ReferenceBandMiniChip(title: String, subtitle: String, color: Color)
 }
 
 @Composable
-private fun ReferenceSignalMetricsRow(snapshot: RouterSnapshot) {
+private fun ReferenceSignalMetricsRow(snapshot: RouterSnapshot, tallLayout: Boolean) {
     val nrVerified = snapshot.raw["_zte_nr_active_verified"].equals("true", ignoreCase = true)
     val rsrp = if (nrVerified) snapshot.nrRsrp else snapshot.lteRsrp
     val sinr = if (nrVerified) snapshot.nrSinr else snapshot.lteSinr
     Row(
-        modifier = Modifier.fillMaxWidth().height(56.dp),
+        modifier = Modifier.fillMaxWidth().height(if (tallLayout) 64.dp else 56.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         ReferenceMetricCard(Modifier.weight(1f), "RSRP", rsrp, "dBm", RefBlue)
