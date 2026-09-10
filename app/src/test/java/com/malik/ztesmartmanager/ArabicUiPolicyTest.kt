@@ -102,11 +102,14 @@ class ArabicUiPolicyTest {
     }
 
     companion object {
+        // افحص الجزء النصي الثابت فقط حتى بداية أي Kotlin interpolation ($... أو ${...}).
+        // هذا يمنع تفسير أسماء المتغيرات داخل interpolation على أنها نص إنجليزي ظاهر للمستخدم،
+        // مع استمرار كشف أي prefix إنجليزي ثابت مثل Text("Speed $value").
         private val USER_FACING_PATTERNS = listOf(
-            Regex("Text\\(\\s*\"([^\"]+)\""),
-            Regex("Toast\\.makeText\\([^,]+,\\s*\"([^\"]+)\""),
-            Regex("createChooser\\([^,]+,\\s*\"([^\"]+)\""),
-            Regex("newPlainText\\(\\s*\"([^\"]+)\"")
+            Regex("Text\\(\\s*\"([^\"$]+)"),
+            Regex("Toast\\.makeText\\([^,]+,\\s*\"([^\"$]+)"),
+            Regex("createChooser\\([^,]+,\\s*\"([^\"$]+)"),
+            Regex("newPlainText\\(\\s*\"([^\"$]+)")
         )
 
         private val TECHNICAL_TOKENS = listOf(
