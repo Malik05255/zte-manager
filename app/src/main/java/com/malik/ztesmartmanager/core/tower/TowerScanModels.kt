@@ -96,7 +96,9 @@ object TowerScanAggregator {
                     arfcn = key.arfcn,
                     rsrp = rsrp,
                     rsrq = rsrq,
-                    sinr = sinr
+                    sinr = sinr,
+                    cellId = mostCommon(observations.mapNotNull { it.cellId }),
+                    areaCode = mostCommon(observations.mapNotNull { it.areaCode })
                 ),
                 seenSamples = observations.size,
                 successfulSamples = sampleCount,
@@ -145,6 +147,12 @@ object TowerScanAggregator {
 
     private fun normalize(value: Double, bad: Double, good: Double): Double =
         (((value - bad) / (good - bad)) * 100.0).coerceIn(0.0, 100.0)
+
+    private fun <T> mostCommon(values: List<T>): T? = values
+        .groupingBy { it }
+        .eachCount()
+        .maxByOrNull { it.value }
+        ?.key
 
     private fun median(values: List<Double>): Double? {
         if (values.isEmpty()) return null

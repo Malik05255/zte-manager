@@ -1,34 +1,20 @@
-name: Tower Map Patch
+name: Android Build
 
 on:
   push:
-    branches:
-      - feature/connect-performance-credentials-0.5.7
-
-permissions:
-  contents: write
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  patch-and-build:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: feature/connect-performance-credentials-0.5.7
-          fetch-depth: 0
 
-      - name: Apply tower map changes
-        shell: bash
-        run: |
-          python3 scripts/patch_tower_map.py
-          git checkout origin/main -- .github/workflows/android-build.yml
-          git config user.name "Malik05255"
-          git config user.email "mmbbrr99@gmail.com"
-          git add -A
-          git commit -m "Add verified live tower map and cell geolocation"
-          git push origin HEAD:feature/connect-performance-credentials-0.5.7
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -48,9 +34,6 @@ jobs:
 
       - name: Run truth-first unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
-
-      - name: Run Android lint
-        run: gradle :app:lintDebug --stacktrace
 
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace

@@ -466,6 +466,13 @@ private fun M3TowerControls(
                 M3CompactAction(if (scanBusy) "جاري…" else "مسح", !scanBusy && !busy, onScan)
             }
             Spacer(Modifier.height(12.dp))
+            VerifiedTowerMapPanel(
+                snapshot = snapshot,
+                cells = cells,
+                busy = busy,
+                onLockCell = onLockCell
+            )
+            Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 M3ValueBox("PCI", snapshot.pci?.toString() ?: "—", "", M3SoftBlue, Modifier.weight(1f))
                 M3ValueBox("EARFCN", snapshot.earfcn?.toString() ?: "—", "", M3SoftGreen, Modifier.weight(1f))

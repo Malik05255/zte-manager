@@ -22,6 +22,7 @@ object GenericZteProfile : RouterProfile {
 
         "network_type", "current_network", "current_network_mode", "nRat",
         "network_provider", "network_provider_fullname", "rmcc", "rmnc", "mdm_mcc", "mdm_mnc",
+        "lte_tac", "nr5g_tac", "tac", "tac_code", "lte_lac", "lac", "lac_code",
         "signalbar", "modem_main_state", "ppp_status",
 
         // Safe read-only WAN traffic fields observed across ZTE web firmware.
