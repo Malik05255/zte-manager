@@ -6,7 +6,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -19,8 +18,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -90,94 +91,94 @@ fun TargetHomeDashboard(
     onRefreshNow: () -> Unit,
     onOptimizeNow: () -> Unit
 ) {
+    val ui = LocalHaiUiMetrics.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        BoxWithConstraints(Modifier.fillMaxSize().background(THBg)) {
-            val compact = maxWidth < 365.dp
-            val side = if (compact) 10.dp else 12.dp
-            val gap = if (compact) 5.dp else 6.dp
+        Column(Modifier.fillMaxSize().background(THBg)) {
+            HaiSharedHeader(
+                connected = status.contains("متصل") || snapshot.networkType != null,
+                onDisconnect = onDisconnect,
+                onMenu = onNavigateMore,
+                onSettings = onNavigateTools,
+                onSearch = onNavigateTowers
+            )
 
-            Column(Modifier.fillMaxSize()) {
-                HaiSharedHeader(
-                    connected = status.contains("متصل") || snapshot.networkType != null,
-                    onDisconnect = onDisconnect,
-                    onMenu = onNavigateMore,
-                    onSettings = onNavigateTools,
-                    onSearch = onNavigateTowers
-                )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = ui.pagePadding)
+            ) {
+                TargetHero(snapshot, Modifier.fillMaxWidth().height(151.dp))
+                Spacer(Modifier.height(ui.sectionGap))
+                TargetSignalMetricsRow(snapshot, Modifier.fillMaxWidth().height(56.dp))
+                Spacer(Modifier.height(ui.sectionGap))
 
-                Column(
-                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = side)
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(131.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ui.sectionGap)
                 ) {
-                    TargetHero(snapshot, Modifier.fillMaxWidth().weight(151f))
-                    Spacer(Modifier.height(gap))
-                    TargetSignalMetricsRow(snapshot, Modifier.fillMaxWidth().weight(56f))
-                    Spacer(Modifier.height(gap))
+                    TargetSpeedCard(
+                        performance = lastPerformance,
+                        busy = speedBusy,
+                        onSpeedTest = onSpeedTest,
+                        modifier = Modifier.weight(1.25f).fillMaxHeight()
+                    )
+                    TargetNetworkModeCard(
+                        snapshot = snapshot,
+                        busy = controlBusy,
+                        onSetNetworkMode = onSetNetworkMode,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
+                }
+                Spacer(Modifier.height(ui.sectionGap))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth().weight(131f),
-                        horizontalArrangement = Arrangement.spacedBy(gap)
-                    ) {
-                        TargetSpeedCard(
-                            performance = lastPerformance,
-                            busy = speedBusy,
-                            onSpeedTest = onSpeedTest,
-                            modifier = Modifier.weight(1.25f).fillMaxHeight()
-                        )
-                        TargetNetworkModeCard(
-                            snapshot = snapshot,
-                            busy = controlBusy,
-                            onSetNetworkMode = onSetNetworkMode,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                    }
-                    Spacer(Modifier.height(gap))
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(118.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ui.sectionGap)
+                ) {
+                    TargetTowerCard(snapshot, onNavigateTowers, Modifier.weight(1.25f).fillMaxHeight())
+                    TargetLiveSignalCard(snapshot, telemetrySamples, Modifier.weight(1f).fillMaxHeight())
+                }
+                Spacer(Modifier.height(ui.sectionGap))
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth().weight(118f),
-                        horizontalArrangement = Arrangement.spacedBy(gap)
-                    ) {
-                        TargetTowerCard(snapshot, onNavigateTowers, Modifier.weight(1.25f).fillMaxHeight())
-                        TargetLiveSignalCard(snapshot, telemetrySamples, Modifier.weight(1f).fillMaxHeight())
-                    }
-                    Spacer(Modifier.height(gap))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().weight(92f),
-                        horizontalArrangement = Arrangement.spacedBy(gap)
-                    ) {
-                        TargetActiveBandsCard(snapshot, onNavigateBands, Modifier.weight(1.25f).fillMaxHeight())
-                        TargetQuickToolsCard(
-                            smartBusy = smartBusy,
-                            onOptimize = onOptimizeNow,
-                            onDiagnostics = onNavigateTools,
-                            onBands = onNavigateBands,
-                            onRefresh = onRefreshNow,
-                            modifier = Modifier.weight(1f).fillMaxHeight()
-                        )
-                    }
-
-                    if (operationMessage.isNotBlank()) {
-                        Text(
-                            text = operationMessage,
-                            color = THMuted,
-                            fontSize = 6.5.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
-                        )
-                    }
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(92.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ui.sectionGap)
+                ) {
+                    TargetActiveBandsCard(snapshot, onNavigateBands, Modifier.weight(1.25f).fillMaxHeight())
+                    TargetQuickToolsCard(
+                        smartBusy = smartBusy,
+                        onOptimize = onOptimizeNow,
+                        onDiagnostics = onNavigateTools,
+                        onBands = onNavigateBands,
+                        onRefresh = onRefreshNow,
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    )
                 }
 
-                HaiSharedBottomNav(
-                    selected = "home",
-                    onHome = {},
-                    onNetwork = onNavigateNetwork,
-                    onTools = onNavigateTools,
-                    onLogs = onNavigateLogs,
-                    onMore = onNavigateMore
-                )
+                if (operationMessage.isNotBlank()) {
+                    Text(
+                        text = operationMessage,
+                        color = THMuted,
+                        fontSize = 6.5.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+                    )
+                }
+                Spacer(Modifier.height(ui.sectionGap))
             }
+
+            HaiSharedBottomNav(
+                selected = "home",
+                onHome = {},
+                onNetwork = onNavigateNetwork,
+                onTools = onNavigateTools,
+                onLogs = onNavigateLogs,
+                onMore = onNavigateMore
+            )
         }
     }
 }
