@@ -100,6 +100,7 @@ fun VerifiedTowerMapPanel(
     onLockCell: (NearbyCell) -> Unit
 ) {
     val context = LocalContext.current
+    val ui = LocalHaiUiMetrics.current
     var locationAllowed by remember { mutableStateOf(hasLocationPermission(context)) }
     var deviceLocation by remember { mutableStateOf(bestLastKnownLocation(context)) }
     var located by remember { mutableStateOf<List<TowerLocatedMarker>>(emptyList()) }
@@ -151,7 +152,11 @@ fun VerifiedTowerMapPanel(
     }
 
     Column(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(TowerMapSoft).padding(12.dp)
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(ui.cardRadius))
+            .background(TowerMapSoft)
+            .padding(ui.pagePadding)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -176,11 +181,14 @@ fun VerifiedTowerMapPanel(
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(ui.sectionGap + 4.dp))
 
         if (!locationAllowed) {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White)
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(ui.smallRadius))
+                    .background(Color.White)
                     .clickable {
                         permissionLauncher.launch(
                             arrayOf(
@@ -189,7 +197,7 @@ fun VerifiedTowerMapPanel(
                             )
                         )
                     }
-                    .padding(12.dp),
+                    .padding(ui.pagePadding),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
@@ -198,22 +206,29 @@ fun VerifiedTowerMapPanel(
                 }
                 Text("تفعيل", color = TowerMapBlue, fontSize = 12.sp, fontWeight = FontWeight.Black)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(ui.sectionGap + 2.dp))
         }
 
         TowerWebMap(
             userLocation = deviceLocation,
             markers = located,
-            modifier = Modifier.fillMaxWidth().height(235.dp).clip(RoundedCornerShape(16.dp))
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(ui.mapHeight)
+                .clip(RoundedCornerShape(ui.smallRadius))
         )
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(ui.sectionGap + 4.dp))
         val current = located.firstOrNull { it.candidate.current }
         if (current != null) {
             TowerMarkerRow(current, deviceLocation, busy, onLockCell)
         } else {
             Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).padding(12.dp),
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(ui.smallRadius))
+                    .background(Color.White)
+                    .padding(ui.pagePadding),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(Modifier.weight(1f)) {
@@ -225,11 +240,11 @@ fun VerifiedTowerMapPanel(
         }
 
         located.filterNot { it.candidate.current }.take(6).forEach { marker ->
-            Spacer(Modifier.height(7.dp))
+            Spacer(Modifier.height(ui.sectionGap + 1.dp))
             TowerMarkerRow(marker, deviceLocation, busy, onLockCell)
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(ui.sectionGap + 2.dp))
         Text(
             "لا يُنشأ أي دبوس من PCI أو قوة الإشارة وحدهما. يلزم Cell ID وTAC/LAC ثم مطابقة مع قاعدة مواقع. التردد الظاهر تردد مرصود، وليس ادعاءً بكل الترددات التي يدعمها الموقع.",
             color = TowerMapMuted,
@@ -251,6 +266,7 @@ private fun TowerMarkerRow(
     busy: Boolean,
     onLockCell: (NearbyCell) -> Unit
 ) {
+    val ui = LocalHaiUiMetrics.current
     val candidate = marker.candidate
     val distance = userLocation?.let {
         distanceMeters(it.latitude, it.longitude, marker.point.latitude, marker.point.longitude)
@@ -259,9 +275,11 @@ private fun TowerMarkerRow(
         candidate.original?.pci != null && candidate.original.arfcn != null
 
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(ui.smallRadius))
             .background(if (candidate.current) TowerMapSoftGreen else Color.White)
-            .padding(12.dp),
+            .padding(ui.pagePadding),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
