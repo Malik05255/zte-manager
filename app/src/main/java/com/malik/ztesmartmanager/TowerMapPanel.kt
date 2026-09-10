@@ -1,4 +1,3 @@
-\
 package com.malik.ztesmartmanager
 
 import android.Manifest
