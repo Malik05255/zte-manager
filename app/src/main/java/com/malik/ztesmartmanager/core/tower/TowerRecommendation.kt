@@ -150,3 +150,52 @@ object TowerRecommendationEngine {
         reason = "بيانات التقييم ناقصة؛ لا توجد توصية آمنة"
     )
 }
+
+/**
+ * Fresh read-only validation performed immediately before a lock attempt.
+ * No router write occurs in this function.
+ */
+suspend fun TowerLockEngine.revalidateCandidate(candidate: NearbyCell): CandidateValidation {
+    if (candidate.rat != "LTE" || candidate.pci == null || candidate.arfcn == null) {
+        return CandidateValidation(
+            valid = false,
+            candidate = candidate,
+            observed = null,
+            report = TowerScanReport(3, 0, emptyList(), 0L),
+            message = "الخلية لا تملك هوية LTE كاملة؛ لم يُرسل أي أمر"
+        )
+    }
+
+    val report = scanNearbyCells(requestedSamples = 3, intervalMs = 450L)
+    val observed = report.cells.firstOrNull {
+        it.rat == "LTE" && it.pci == candidate.pci && it.arfcn == candidate.arfcn
+    }
+
+    if (report.successfulSamples < 2 || observed == null) {
+        return CandidateValidation(
+            valid = false,
+            candidate = candidate,
+            observed = observed,
+            report = report,
+            message = "لم تُرصد الخلية المختارة بثبات في فحص ما قبل القفل؛ لم يُرسل أمر القفل"
+        )
+    }
+
+    val repeatedEnough = observed.samplesSeen >= 2 && observed.presencePercent >= 60
+    val hasRfEvidence = observed.evidenceScore != null && observed.rsrp != null
+    val severeDrop = candidate.rsrp != null && observed.rsrp != null && observed.rsrp < candidate.rsrp - 15.0
+    val valid = repeatedEnough && hasRfEvidence && !severeDrop
+
+    return CandidateValidation(
+        valid = valid,
+        candidate = candidate,
+        observed = observed,
+        report = report,
+        message = when {
+            severeDrop -> "الخلية نفسها ما زالت موجودة لكن الإشارة هبطت أكثر من 15 dB؛ أعد المسح قبل التثبيت"
+            !repeatedEnough -> "ظهور الخلية غير متكرر بما يكفي قبل القفل؛ لم يُرسل أي أمر"
+            !hasRfEvidence -> "هوية الخلية ظهرت لكن قياس RF غير كافٍ؛ لم يُرسل أي أمر"
+            else -> "تمت إعادة رؤية الخلية المختارة في ${observed.samplesSeen}/${observed.samplesTotal} قراءات وهي جاهزة لمحاولة قفل موثّقة"
+        }
+    )
+}
