@@ -38,11 +38,11 @@ enum class PlacementGuidance {
 }
 
 /**
- * Fast placement scorer tuned for small physical router movements.
+ * Evidence-only RF scorer.
  *
- * The score intentionally gives SINR more weight than raw RSRP because a strong but noisy
- * signal can perform worse than a slightly weaker clean signal. A short moving window and
- * EMA smoothing keep the assistant responsive without reacting to every radio spike.
+ * Missing metrics contribute no weight. A missing LTE or NR metric is never replaced by a made-up
+ * middle score. Multi-sample scoring uses medians to reduce radio spikes, while stability is based
+ * on measured variance and actual serving-cell identity changes.
  */
 class NetworkQualityEngine(
     private val windowSize: Int = 6,
@@ -57,21 +57,15 @@ class NetworkQualityEngine(
         history.addLast(snapshot)
         while (history.size > windowSize) history.removeFirst()
 
-        val instant = score(snapshot, history.toList())
+        val samples = history.toList()
+        val instant = scoreSamples(samples)
         val previous = previousSmoothed
-        val smoothed = if (previous == null) {
-            instant.total.toDouble()
-        } else {
-            previous + smoothingAlpha * (instant.total - previous)
-        }
+        val smoothed = if (previous == null) instant.total.toDouble()
+        else previous + smoothingAlpha * (instant.total - previous)
         val total = smoothed.roundToInt().coerceIn(0, 100)
 
         val previousRouter = previousSnapshot
-        val cellChanged = previousRouter != null && (
-            (snapshot.cellId != null && previousRouter.cellId != null && snapshot.cellId != previousRouter.cellId) ||
-                (snapshot.pci != null && previousRouter.pci != null && snapshot.pci != previousRouter.pci)
-            )
-
+        val cellChanged = previousRouter != null && identityChanged(previousRouter, snapshot)
         val previousInt = previous?.roundToInt()
         val oldBest = bestScore
         val wasBest = total > bestScore
@@ -100,7 +94,7 @@ class NetworkQualityEngine(
             guidance = guidance,
             deltaFromBest = gapFromBest,
             bestScore = bestScore,
-            confidence = confidence(history.size),
+            confidence = confidence(samples),
             cellChanged = cellChanged
         )
     }
@@ -112,57 +106,63 @@ class NetworkQualityEngine(
         previousSnapshot = null
     }
 
-    fun score(snapshot: RouterSnapshot): QualityScore = score(snapshot, listOf(snapshot))
+    fun score(snapshot: RouterSnapshot): QualityScore = scoreSamples(listOf(snapshot))
 
-    private fun score(current: RouterSnapshot, samples: List<RouterSnapshot>): QualityScore {
-        val lteRsrp = normalize(current.lteRsrp, bad = -122.0, excellent = -75.0)
-        val lteRsrq = normalize(current.lteRsrq, bad = -21.0, excellent = -7.0)
-        val lteSinr = normalize(current.lteSinr, bad = -5.0, excellent = 27.0)
-        val nrRsrp = normalizeNullable(current.nrRsrp, bad = -122.0, excellent = -74.0)
-        val nrSinr = normalizeNullable(current.nrSinr, bad = -5.0, excellent = 28.0)
+    fun scoreSamples(samples: List<RouterSnapshot>): QualityScore {
+        if (samples.isEmpty()) return emptyScore()
+
+        val lteRsrp = median(samples.mapNotNull { it.lteRsrp })?.let { normalize(it, -122.0, -75.0) }
+        val lteRsrq = median(samples.mapNotNull { it.lteRsrq })?.let { normalize(it, -21.0, -7.0) }
+        val lteSinr = median(samples.mapNotNull { it.lteSinr })?.let { normalize(it, -5.0, 27.0) }
+        val nrRsrp = median(samples.mapNotNull { it.nrRsrp })?.let { normalize(it, -122.0, -74.0) }
+        val nrSinr = median(samples.mapNotNull { it.nrSinr })?.let { normalize(it, -5.0, 28.0) }
         val stability = calculateStability(samples)
 
         val weighted = mutableListOf<Pair<Int, Double>>()
-        weighted += lteRsrp to 0.20
-        weighted += lteRsrq to 0.15
-        weighted += lteSinr to 0.32
-        nrRsrp?.let { weighted += it to 0.08 }
-        nrSinr?.let { weighted += it to 0.10 }
-        weighted += stability to 0.15
+        lteRsrp?.let { weighted += it to 0.18 }
+        lteRsrq?.let { weighted += it to 0.14 }
+        lteSinr?.let { weighted += it to 0.28 }
+        nrRsrp?.let { weighted += it to 0.14 }
+        nrSinr?.let { weighted += it to 0.16 }
+        if (samples.size >= 3) weighted += stability to 0.10
 
+        if (weighted.isEmpty()) return emptyScore()
         val weightSum = weighted.sumOf { it.second }
-        val total = if (weightSum <= 0.0) 0 else {
-            (weighted.sumOf { it.first * it.second } / weightSum).roundToInt().coerceIn(0, 100)
-        }
+        val total = (weighted.sumOf { it.first * it.second } / weightSum).roundToInt().coerceIn(0, 100)
 
-        val signal = if (nrRsrp == null) lteRsrp else ((lteRsrp * 0.65) + (nrRsrp * 0.35)).roundToInt()
-        val cleanliness = if (nrSinr == null) lteSinr else ((lteSinr * 0.65) + (nrSinr * 0.35)).roundToInt()
+        val signalValues = listOfNotNull(lteRsrp, nrRsrp)
+        val cleanlinessValues = listOfNotNull(lteSinr, nrSinr)
+        val signal = signalValues.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 0
+        val cleanliness = cleanlinessValues.takeIf { it.isNotEmpty() }?.average()?.roundToInt() ?: 0
+        val quality = lteRsrq ?: 0
 
         return QualityScore(
             total = total,
             signal = signal.coerceIn(0, 100),
             cleanliness = cleanliness.coerceIn(0, 100),
-            quality = lteRsrq,
+            quality = quality.coerceIn(0, 100),
             stability = stability,
             label = qualityLabel(total)
         )
     }
 
     private fun calculateStability(samples: List<RouterSnapshot>): Int {
-        if (samples.size < 3) return 74
+        if (samples.size < 3) return 0
 
-        val rsrp = samples.mapNotNull { it.lteRsrp ?: it.nrRsrp }
-        val sinr = samples.mapNotNull { it.lteSinr ?: it.nrSinr }
-        if (rsrp.size < 3 && sinr.size < 3) return 60
-
+        val rsrp = samples.mapNotNull { it.nrRsrp ?: it.lteRsrp }
+        val sinr = samples.mapNotNull { it.nrSinr ?: it.lteSinr }
         val rsrpDeviation = standardDeviation(rsrp)
         val sinrDeviation = standardDeviation(sinr)
-        val identityChanges = samples.zipWithNext().count { (a, b) ->
-            (a.cellId != null && b.cellId != null && a.cellId != b.cellId) ||
-                (a.pci != null && b.pci != null && a.pci != b.pci)
-        }
-        val penalty = (rsrpDeviation * 6.0 + sinrDeviation * 5.0 + identityChanges * 7.0).roundToInt()
+        val identityChanges = samples.zipWithNext().count { (a, b) -> identityChanged(a, b) }
+        val penalty = (rsrpDeviation * 6.0 + sinrDeviation * 5.0 + identityChanges * 12.0).roundToInt()
         return (100 - penalty).coerceIn(0, 100)
+    }
+
+    private fun identityChanged(a: RouterSnapshot, b: RouterSnapshot): Boolean {
+        if (a.cellId != null && b.cellId != null && a.cellId != b.cellId) return true
+        if (a.pci != null && b.pci != null && a.pci != b.pci) return true
+        if (a.earfcn != null && b.earfcn != null && a.earfcn != b.earfcn) return true
+        return false
     }
 
     private fun standardDeviation(values: List<Double>): Double {
@@ -171,20 +171,45 @@ class NetworkQualityEngine(
         return sqrt(values.sumOf { (it - mean).pow(2) } / values.size)
     }
 
-    private fun normalize(value: Double?, bad: Double, excellent: Double): Int =
-        normalizeNullable(value, bad, excellent) ?: 45
+    private fun median(values: List<Double>): Double? {
+        if (values.isEmpty()) return null
+        val sorted = values.sorted()
+        val middle = sorted.size / 2
+        return if (sorted.size % 2 == 1) sorted[middle]
+        else (sorted[middle - 1] + sorted[middle]) / 2.0
+    }
 
-    private fun normalizeNullable(value: Double?, bad: Double, excellent: Double): Int? {
-        if (value == null) return null
+    private fun normalize(value: Double, bad: Double, excellent: Double): Int {
         val ratio = ((value - bad) / (excellent - bad)).coerceIn(0.0, 1.0)
         return (ratio * 100).roundToInt()
     }
 
-    private fun confidence(sampleCount: Int): Int = when {
-        sampleCount >= windowSize -> 100
-        sampleCount <= 1 -> 35
-        else -> (35 + (sampleCount - 1) * (65.0 / (windowSize - 1))).roundToInt()
+    private fun confidence(samples: List<RouterSnapshot>): Int {
+        val countScore = when {
+            samples.size >= windowSize -> 100
+            samples.size <= 1 -> 30
+            else -> (30 + (samples.size - 1) * (70.0 / (windowSize - 1))).roundToInt()
+        }
+        val latest = samples.lastOrNull() ?: return 0
+        val evidenceCount = listOf(
+            latest.lteRsrp,
+            latest.lteRsrq,
+            latest.lteSinr,
+            latest.nrRsrp,
+            latest.nrSinr
+        ).count { it != null }
+        val evidenceScore = (evidenceCount * 20).coerceIn(0, 100)
+        return ((countScore * 0.65) + (evidenceScore * 0.35)).roundToInt().coerceIn(0, 100)
     }
+
+    private fun emptyScore() = QualityScore(
+        total = 0,
+        signal = 0,
+        cleanliness = 0,
+        quality = 0,
+        stability = 0,
+        label = "غير مؤكد"
+    )
 
     private fun qualityLabel(total: Int): String = when {
         total >= 92 -> "ممتاز جدًا"
@@ -192,6 +217,7 @@ class NetworkQualityEngine(
         total >= 70 -> "جيد جدًا"
         total >= 58 -> "جيد"
         total >= 43 -> "متوسط"
-        else -> "ضعيف"
+        total > 0 -> "ضعيف"
+        else -> "غير مؤكد"
     }
 }
