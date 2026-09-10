@@ -158,6 +158,28 @@ fun ArabicHaiDashboardV3(
                 bandColumns = if (width < 350) 3 else 4
             )
 
+            if (snapshot != null && section == M3Section.HOME) {
+                ReferenceHomeDashboard(
+                    snapshot = snapshot,
+                    telemetrySamples = telemetrySamples,
+                    status = status,
+                    operationMessage = operationMessage,
+                    lastPerformance = lastPerformance,
+                    speedBusy = speedBusy,
+                    controlBusy = controlBusy,
+                    smartBusy = smartBusy,
+                    onDisconnect = onDisconnect,
+                    onSpeedTest = onSpeedTest,
+                    onSetNetworkMode = onSetNetworkMode,
+                    onNavigateNetwork = { section = M3Section.NETWORK },
+                    onNavigateTowers = { section = M3Section.TOWERS },
+                    onNavigateBands = { section = M3Section.BANDS },
+                    onNavigateTools = { section = M3Section.TOOLS },
+                    onOptimizeNow = onOptimizeNow
+                )
+                return@BoxWithConstraints
+            }
+
             Column(Modifier.fillMaxSize()) {
                 M3Header(layout, snapshot != null, onDisconnect)
 
