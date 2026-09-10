@@ -58,21 +58,23 @@ object ZteSnapshotParser {
             primaryCell?.let { primary -> sameLteCarrier(primary, secondary) } == true
         }
 
-        // VERIFIED-ONLY CA policy:
-        // Secondary-cell strings can be cached after CA is released. They are display evidence only.
-        // We declare CA active only when an explicit live activation flag says so.
+        // A secondary-cell string can remain cached after CA is released. For an ACTIVE claim we
+        // therefore require BOTH an activation state and at least one structurally complete SCell.
+        val verifiedSecondaryCells = nonDuplicateSecondaryCells.filter { cell ->
+            cell.band != null && cell.pci != null && cell.arfcn != null
+        }
+        val secondaryCarrierEvidence = verifiedSecondaryCells.isNotEmpty()
+
         val rawCaState = firstNonBlank(raw, "wan_lte_ca", "Lte_ca_status")
         val explicitCaActive = isCaActivated(rawCaState)
         val explicitCaInactive = isCaDeactivated(rawCaState)
         val scellActivationFlag = parseBooleanFlag(raw["lte_ca_scell_ca_activated"])
-        val caVerified = explicitCaActive || explicitCaInactive || scellActivationFlag != null
-        val caActive = when {
-            explicitCaActive -> true
-            explicitCaInactive -> false
-            scellActivationFlag != null -> scellActivationFlag
-            else -> false
-        }
-        val secondaryCells = if (caActive) nonDuplicateSecondaryCells else emptyList()
+        val activationSaysActive = explicitCaActive || scellActivationFlag == true
+        val activationSaysInactive = explicitCaInactive || scellActivationFlag == false
+        val caStateConflict = activationSaysActive && activationSaysInactive
+        val caActive = !caStateConflict && activationSaysActive && secondaryCarrierEvidence
+        val caVerified = !caStateConflict && (caActive || activationSaysInactive)
+        val secondaryCells = if (caActive) verifiedSecondaryCells else emptyList()
 
         val nsaBand = normalizeNrBand(firstNonBlank(raw, "nr_ca_pcell_band", "nr5g_action_nsa_band", "nr5g_action_band", "ZCELLINFO_band"))
         val saBand = normalizeNrBand(firstNonBlank(raw, "nr_ca_pcell_band", "nr5g_action_band", "ZCELLINFO_band", "nr5g_action_nsa_band"))
@@ -150,9 +152,12 @@ object ZteSnapshotParser {
         raw["_zte_nr_cell_id_evidence"] = (rawNrCellId != null).toString()
         raw["_zte_ca_active"] = caActive.toString()
         raw["_zte_ca_verified"] = caVerified.toString()
+        raw["_zte_ca_state_conflict"] = caStateConflict.toString()
+        raw["_zte_ca_secondary_evidence"] = secondaryCarrierEvidence.toString()
         raw["_zte_ca_state_raw"] = rawCaState.orEmpty()
         raw["_zte_raw_network_type"] = rawNetworkType.orEmpty()
         raw["_zte_secondary_cells_raw_count"] = parsedSecondaryCells.size.toString()
+        raw["_zte_secondary_cells_verified_count"] = verifiedSecondaryCells.size.toString()
         raw["_zte_secondary_cells_count"] = secondaryCells.size.toString()
 
         val mcc = firstNonBlank(raw, "rmcc", "mdm_mcc").orEmpty().trim()
@@ -200,12 +205,14 @@ object ZteSnapshotParser {
         val type = value?.trim()?.uppercase()?.replace('_', '-')?.replace(" ", "").orEmpty()
         if (type.isBlank()) return RadioState.UNKNOWN
 
-        return when {
-            type == "ENDC" || type == "EN-DC" || type.contains("EN-DC") || type.contains("ENDC") -> RadioState.NSA_ACTIVE
-            type == "LTE-NSA" || (type.contains("LTE") && type.contains("NSA")) -> RadioState.NSA_STANDBY
-            type == "SA" || type == "5G-SA" || type == "NR-SA" || type == "NR5G-SA" -> RadioState.SA_ACTIVE
-            type.contains("5G") || type.startsWith("NR") -> RadioState.FIVE_G_ACTIVE
-            type.contains("LTE") || type == "4G" -> RadioState.LTE_ONLY
+        // Deliberately exact: strings that merely contain "5G" can be configuration labels rather
+        // than the current RAT. New firmware aliases must be added explicitly after evidence.
+        return when (type) {
+            "ENDC", "EN-DC" -> RadioState.NSA_ACTIVE
+            "LTE-NSA" -> RadioState.NSA_STANDBY
+            "SA", "5G-SA", "NR-SA", "NR5G-SA", "NR5G" -> RadioState.SA_ACTIVE
+            "5G", "NR", "5G-ACTIVE", "NR-ACTIVE", "NR5G-ACTIVE" -> RadioState.FIVE_G_ACTIVE
+            "LTE", "4G", "LTE-A", "LTE+" -> RadioState.LTE_ONLY
             else -> RadioState.UNKNOWN
         }
     }
@@ -357,6 +364,8 @@ object ZteSnapshotParser {
     private fun parsePositiveInt(value: String?): Int? = parseSmartInt(value)?.takeIf { it > 0 }
 
     private fun parseZtePci(value: String?, max: Int): Int? {
+        // MC801A-family goform exposes LTE/NR PCI as hexadecimal strings. Try hex first even
+        // when the token contains digits only (e.g. "64" means 0x64 = 100 on these fields).
         val text = cleanValue(value)?.removePrefix("0x")?.removePrefix("0X") ?: return null
         val hex = text.toIntOrNull(16)
         if (hex != null && hex in 0..max) return hex
