@@ -48,39 +48,65 @@ private val SignalGrid = Color(0xFFD8D0C4)
 @Composable
 fun SignalHistoryCard(
     samples: List<SafeTelemetrySample>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    ultraCompact: Boolean = false,
+    plotHeightDp: Int = 92,
+    innerVerticalDp: Int = 8
 ) {
     val model = remember(samples) { SignalHistoryPresenter.from(samples) }
 
     Card(
-        modifier = modifier.padding(horizontal = 10.dp, vertical = 2.dp),
-        shape = RoundedCornerShape(22.dp),
+        modifier = modifier.padding(horizontal = 10.dp, vertical = if (compact) 1.dp else 2.dp),
+        shape = RoundedCornerShape(if (compact) 18.dp else 22.dp),
         colors = CardDefaults.cardColors(containerColor = SignalCardBg)
     ) {
-        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("سجل الإشارة", color = SignalInk, fontSize = 9.sp, fontWeight = FontWeight.Black)
-                    Text(
-                        if (model.hasAnySignal) "آخر ${model.sampleSlots.coerceAtMost(30)} قراءة • بدون ملء القيم المفقودة" else "بانتظار قياسات RSRP موثوقة",
-                        color = SignalMuted,
-                        fontSize = 6.sp
-                    )
+        Column(Modifier.padding(horizontal = 10.dp, vertical = innerVerticalDp.dp)) {
+            if (ultraCompact) {
+                SignalHistoryTitle(model)
+                Spacer(Modifier.size(3.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    SignalLegend("LTE", SignalLte, model.lte)
+                    SignalLegend("5G NR", SignalNr, model.nr)
                 }
-                SignalLegend("LTE", SignalLte, model.lte)
-                Spacer(Modifier.size(7.dp))
-                SignalLegend("5G NR", SignalNr, model.nr)
+            } else {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f)) { SignalHistoryTitle(model) }
+                    SignalLegend("LTE", SignalLte, model.lte)
+                    Spacer(Modifier.size(if (compact) 5.dp else 7.dp))
+                    SignalLegend("5G NR", SignalNr, model.nr)
+                }
             }
 
-            Spacer(Modifier.size(6.dp))
-            SignalPlot(model = model, modifier = Modifier.fillMaxWidth().height(92.dp))
-            Spacer(Modifier.size(4.dp))
+            Spacer(Modifier.size(if (compact) 3.dp else 6.dp))
+            SignalPlot(model = model, modifier = Modifier.fillMaxWidth().height(plotHeightDp.dp), compact = compact)
+            Spacer(Modifier.size(if (compact) 2.dp else 4.dp))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SignalTrendText("LTE", model.lte, Modifier.weight(1f))
-                SignalTrendText("5G", model.nr, Modifier.weight(1f))
+            if (ultraCompact) {
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                    SignalTrendText("LTE", model.lte, Modifier.fillMaxWidth())
+                    SignalTrendText("5G", model.nr, Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SignalTrendText("LTE", model.lte, Modifier.weight(1f))
+                    SignalTrendText("5G", model.nr, Modifier.weight(1f))
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun SignalHistoryTitle(model: SignalHistoryModel) {
+    Column {
+        Text("سجل الإشارة", color = SignalInk, fontSize = 9.sp, fontWeight = FontWeight.Black)
+        Text(
+            if (model.hasAnySignal) "آخر ${model.sampleSlots.coerceAtMost(30)} قراءة • بدون ملء القيم المفقودة" else "بانتظار قياسات RSRP موثوقة",
+            color = SignalMuted,
+            fontSize = 6.sp,
+            maxLines = 1
+        )
     }
 }
 
@@ -93,7 +119,8 @@ private fun SignalLegend(label: String, color: Color, series: SignalSeries) {
             "$label ${series.latestDbm?.let(::formatDbm) ?: "—"}",
             color = if (series.latestDbm != null) SignalInk else SignalMuted,
             fontSize = 6.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
         )
     }
 }
@@ -116,7 +143,7 @@ private fun SignalTrendText(label: String, series: SignalSeries, modifier: Modif
 }
 
 @Composable
-private fun SignalPlot(model: SignalHistoryModel, modifier: Modifier = Modifier) {
+private fun SignalPlot(model: SignalHistoryModel, modifier: Modifier = Modifier, compact: Boolean = false) {
     val allValues = remember(model) { (model.lte.points + model.nr.points).map { it.dbm } }
     val minDbm = if (allValues.isEmpty()) -120.0 else min(-60.0, allValues.minOrNull()!! - 4.0)
     val maxDbm = if (allValues.isEmpty()) -70.0 else max(-115.0, allValues.maxOrNull()!! + 4.0)
@@ -124,14 +151,16 @@ private fun SignalPlot(model: SignalHistoryModel, modifier: Modifier = Modifier)
 
     Box(
         modifier = modifier
-            .border(1.dp, SignalGrid.copy(alpha = 0.75f), RoundedCornerShape(14.dp))
-            .padding(6.dp)
+            .border(1.dp, SignalGrid.copy(alpha = 0.75f), RoundedCornerShape(if (compact) 11.dp else 14.dp))
+            .padding(if (compact) 4.dp else 6.dp)
     ) {
         Canvas(Modifier.matchParentSize()) {
-            val left = 4.dp.toPx()
-            val right = size.width - 4.dp.toPx()
-            val top = 5.dp.toPx()
-            val bottom = size.height - 5.dp.toPx()
+            val sideInset = if (compact) 3.dp.toPx() else 4.dp.toPx()
+            val verticalInset = if (compact) 3.dp.toPx() else 5.dp.toPx()
+            val left = sideInset
+            val right = size.width - sideInset
+            val top = verticalInset
+            val bottom = size.height - verticalInset
             val width = (right - left).coerceAtLeast(1f)
             val height = (bottom - top).coerceAtLeast(1f)
 
@@ -164,10 +193,10 @@ private fun SignalPlot(model: SignalHistoryModel, modifier: Modifier = Modifier)
                             val p = offset(point)
                             if (index == 0) path.moveTo(p.x, p.y) else path.lineTo(p.x, p.y)
                         }
-                        drawPath(path, color = color, style = Stroke(width = 2.dp.toPx()))
+                        drawPath(path, color = color, style = Stroke(width = if (compact) 1.6.dp.toPx() else 2.dp.toPx()))
                     }
                     segment.forEach { point ->
-                        drawCircle(color = color, radius = 2.1.dp.toPx(), center = offset(point))
+                        drawCircle(color = color, radius = if (compact) 1.8.dp.toPx() else 2.1.dp.toPx(), center = offset(point))
                     }
                     segment = mutableListOf()
                 }
