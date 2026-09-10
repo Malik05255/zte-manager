@@ -10,10 +10,11 @@ import com.malik.ztesmartmanager.core.model.RuntimeCapabilityReport
 import com.malik.ztesmartmanager.core.profile.GenericZteProfile
 import com.malik.ztesmartmanager.core.profile.RouterProfile
 import com.malik.ztesmartmanager.core.profile.RouterProfileRegistry
+import com.malik.ztesmartmanager.core.storage.RouterBackupIdentityGuard
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 
-class ZteRouterClient(routerAddress: String) {
+class ZteRouterClient(private val routerAddress: String) {
     private val transport = ZteHttpTransport(routerAddress)
 
     var profile: RouterProfile = GenericZteProfile
@@ -100,17 +101,44 @@ class ZteRouterClient(routerAddress: String) {
         return backup
     }
 
-    /** Restore only values that were actually exposed in the captured snapshot. */
+    /**
+     * Restore only values that were actually exposed in the captured snapshot.
+     *
+     * The persistent backup is fail-closed: before the first mutating goform, the client performs
+     * a fresh read-only identity query and requires the saved router address/profile plus every
+     * captured Model/Hardware/Firmware value to match. If identity cannot be proven, no write is sent.
+     */
     suspend fun restoreSettings(backup: RouterSettingsBackup): RouterRestoreReport {
-        if (backup.profileId != profile.id) {
-            return RouterRestoreReport(
-                listOf(
-                    RouterRestoreStep(
-                        "Profile",
-                        OperationResult(false, false, "النسخة تخص ${backup.profileId} والجهاز الحالي ${profile.id}; تم إيقاف الاستعادة")
-                    )
-                )
+        val identity = runCatching { readRaw(IDENTITY_FIELDS) }.getOrElse {
+            return restoreBlocked("تعذر قراءة هوية الراوتر قبل الاستعادة (${it.message.orEmpty()})؛ لم يتم إرسال أي أمر كتابة")
+        }
+
+        val logInfo = identity.optString("loginfo").trim()
+        if (logInfo.isNotBlank() && !logInfo.equals("ok", true)) {
+            return restoreBlocked("جلسة الإدارة الحالية غير موثقة أثناء فحص الهوية؛ لم يتم إرسال أي أمر كتابة")
+        }
+
+        val currentModel = firstValue(identity, "device_name", "model_name", "product_name")
+        val currentHardware = exactValue(identity, "hardware_version")?.trim()?.takeIf { it.isNotBlank() }
+        val currentFirmware = firstValue(identity, "wa_inner_version", "web_version", "cr_version")
+        val resolvedProfile = RouterProfileRegistry.resolve(currentModel, currentHardware, currentFirmware)
+
+        if (resolvedProfile.id != profile.id) {
+            return restoreBlocked(
+                "هوية الراوتر المقروءة الآن تحل إلى Profile ${resolvedProfile.id} بينما الجلسة الحالية ${profile.id}; أُوقفت الاستعادة قبل أي كتابة"
             )
+        }
+
+        val identityDecision = RouterBackupIdentityGuard.verify(
+            backup = backup,
+            currentRouterAddress = routerAddress,
+            currentProfileId = resolvedProfile.id,
+            currentModel = currentModel,
+            currentHardwareVersion = currentHardware,
+            currentFirmware = currentFirmware
+        )
+        if (!identityDecision.allowed) {
+            return restoreBlocked(identityDecision.reason)
         }
 
         val steps = mutableListOf<RouterRestoreStep>()
@@ -200,7 +228,7 @@ class ZteRouterClient(routerAddress: String) {
         return OperationResult(
             success = verified,
             verified = verified,
-            message = if (verified) "تم حفظ PCI/EARFCN والتحقق منهما" else "قبل الراوتر الأمر لكن read-back لم يطابق القيم؛ لن نعرضه كنجاح",
+            message = if (verified) "تم حفظ PCI/EARFCN والتحقق منهما" else "قبل الراوتر أمر القفل، لكن لم يعطِ read-back مطابقًا؛ لذلك لن يعتبره التطبيق قفلًا مؤكدًا ولن يشغّل Tower Guard",
             rawResult = raw
         )
     }
@@ -378,6 +406,15 @@ class ZteRouterClient(routerAddress: String) {
             rawResult = raw
         )
     }
+
+    private fun restoreBlocked(reason: String): RouterRestoreReport = RouterRestoreReport(
+        listOf(
+            RouterRestoreStep(
+                "Backup identity",
+                OperationResult(false, false, reason)
+            )
+        )
+    )
 
     private fun resolveRestorableNrMask(backup: RouterSettingsBackup): String? {
         backup.nrBandLock?.let { return it }
