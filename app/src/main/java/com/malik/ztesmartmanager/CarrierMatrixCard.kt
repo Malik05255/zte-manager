@@ -83,19 +83,9 @@ fun CarrierMatrixCard(
         } else {
             MatrixHeader(compact)
             Spacer(Modifier.size(3.dp))
-            model.rows.take(MAX_VISIBLE_CARRIERS).forEach { row ->
+            model.rows.forEach { row ->
                 MatrixRow(row, compact)
                 Spacer(Modifier.size(3.dp))
-            }
-            if (model.rows.size > MAX_VISIBLE_CARRIERS) {
-                Text(
-                    "+ ${model.rows.size - MAX_VISIBLE_CARRIERS} Carriers إضافية موثقة",
-                    color = MatrixAccent,
-                    fontSize = 6.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
             }
             Text(
                 model.evidenceMessage,
@@ -150,9 +140,6 @@ private fun MatrixRow(row: CarrierMatrixRow, compact: Boolean) {
 }
 
 @Composable
-private fun RowScopeMatrixCellPlaceholder() = Unit
-
-@Composable
 private fun androidx.compose.foundation.layout.RowScope.MatrixCell(
     text: String,
     weight: Float,
@@ -173,5 +160,3 @@ private fun androidx.compose.foundation.layout.RowScope.MatrixCell(
 
 private fun formatBandwidth(value: Double): String =
     if (value % 1.0 == 0.0) "${value.toInt()}M" else String.format(Locale.US, "%.1fM", value)
-
-private const val MAX_VISIBLE_CARRIERS = 6
