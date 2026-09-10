@@ -3,6 +3,19 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val ciVersionCode = System.getenv("ZTE_VERSION_CODE")?.toIntOrNull()
+val ciVersionName = System.getenv("ZTE_VERSION_NAME")
+val ciDebugStoreFile = System.getenv("ZTE_CI_DEBUG_STORE_FILE")
+val ciDebugStorePassword = System.getenv("ZTE_CI_DEBUG_STORE_PASSWORD")
+val ciDebugKeyAlias = System.getenv("ZTE_CI_DEBUG_KEY_ALIAS")
+val ciDebugKeyPassword = System.getenv("ZTE_CI_DEBUG_KEY_PASSWORD")
+val hasStableCiDebugSigning = listOf(
+    ciDebugStoreFile,
+    ciDebugStorePassword,
+    ciDebugKeyAlias,
+    ciDebugKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.malik.ztesmartmanager"
     compileSdk = 36
@@ -11,8 +24,29 @@ android {
         applicationId = "com.malik.ztesmartmanager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 35
-        versionName = "0.5.7"
+        // Local builds keep a sane base code. CI injects a monotonically increasing code so
+        // Honor/Android Package Installer always sees a newer package instead of a same-code APK.
+        versionCode = ciVersionCode ?: 36
+        versionName = ciVersionName ?: "0.5.8"
+    }
+
+    if (hasStableCiDebugSigning) {
+        signingConfigs {
+            create("stableCiDebug") {
+                storeFile = file(ciDebugStoreFile!!)
+                storePassword = ciDebugStorePassword
+                keyAlias = ciDebugKeyAlias
+                keyPassword = ciDebugKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("debug") {
+            if (hasStableCiDebugSigning) {
+                signingConfig = signingConfigs.getByName("stableCiDebug")
+            }
+        }
     }
 
     buildFeatures {
