@@ -38,57 +38,79 @@ jobs:
           echo "ZTE_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
           echo "ZTE_VERSION_NAME=0.5.8.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
-      - name: Require stable update signing identity
-        env:
-          ZTE_KEYSTORE_BASE64: ${{ secrets.ZTE_KEYSTORE_BASE64 }}
-          ZTE_KEYSTORE_PASSWORD: ${{ secrets.ZTE_KEYSTORE_PASSWORD }}
-        shell: bash
-        run: |
-          if [ -z "$ZTE_KEYSTORE_BASE64" ] || [ -z "$ZTE_KEYSTORE_PASSWORD" ]; then
-            echo "Stable signing secrets are missing. Refusing to publish another APK with a changing debug signature."
-            exit 1
-          fi
-
-      - name: Prepare stable signing keystore
-        env:
-          ZTE_KEYSTORE_BASE64: ${{ secrets.ZTE_KEYSTORE_BASE64 }}
-          ZTE_KEYSTORE_PASSWORD: ${{ secrets.ZTE_KEYSTORE_PASSWORD }}
-        shell: bash
-        run: |
-          printf '%s' "$ZTE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zte-smart-hai-update.jks"
-          chmod 600 "$RUNNER_TEMP/zte-smart-hai-update.jks"
-          echo "ZTE_SIGNING_STORE_FILE=$RUNNER_TEMP/zte-smart-hai-update.jks" >> "$GITHUB_ENV"
-          echo "ZTE_SIGNING_STORE_PASSWORD=$ZTE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "ZTE_SIGNING_KEY_ALIAS=zte-smart-hai" >> "$GITHUB_ENV"
-          echo "ZTE_SIGNING_KEY_PASSWORD=$ZTE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-
       - name: Run truth-first unit tests
         run: gradle :app:testDebugUnitTest --stacktrace
 
       - name: Run Android lint
         run: gradle :app:lintDebug --stacktrace
 
-      - name: Build signed update APK
+      - name: Build unsigned test release
+        if: github.event_name == 'pull_request'
         run: gradle :app:assembleRelease --stacktrace
 
-      - name: Verify signed update APK
+      - name: Sign PR APK with stable public Android test identity
+        if: github.event_name == 'pull_request'
         shell: bash
         run: |
-          APK="app/build/outputs/apk/release/app-release.apk"
-          EXPECTED_CERT="69FF3E0474964C733322E2AF1F36D840C03E22284B27731FF6B0D4B607D83009"
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/apk-signature.txt
-          ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/apk-signature.txt | head -n1 | tr '[:lower:]' '[:upper:]' | tr -d ':[:space:]')
-          if [ "$ACTUAL_CERT" != "$EXPECTED_CERT" ]; then
-            echo "Signing certificate mismatch"
+          mkdir -p "$RUNNER_TEMP/aosp-testkey"
+          curl --fail --location --silent --show-error \
+            https://raw.githubusercontent.com/aosp-mirror/platform_build/main/target/product/security/testkey.pk8 \
+            --output "$RUNNER_TEMP/aosp-testkey/testkey.pk8"
+          curl --fail --location --silent --show-error \
+            https://raw.githubusercontent.com/aosp-mirror/platform_build/main/target/product/security/testkey.x509.pem \
+            --output "$RUNNER_TEMP/aosp-testkey/testkey.x509.pem"
+          CERT_SHA=$(openssl x509 -in "$RUNNER_TEMP/aosp-testkey/testkey.x509.pem" -outform DER | sha256sum | awk '{print toupper($1)}')
+          test "$CERT_SHA" = "A40DA80A59D170CAA950CF15C18C454D47A39B26989D8B640ECD745BA71BF5DC"
+          UNSIGNED="app/build/outputs/apk/release/app-release-unsigned.apk"
+          OUT="app/build/outputs/apk/release/ztesmart-honor200-test.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" sign \
+            --key "$RUNNER_TEMP/aosp-testkey/testkey.pk8" \
+            --cert "$RUNNER_TEMP/aosp-testkey/testkey.x509.pem" \
+            --out "$OUT" "$UNSIGNED"
+
+      - name: Prepare private production signing on main
+        if: github.event_name != 'pull_request'
+        env:
+          ZTE_KEYSTORE_BASE64: ${{ secrets.ZTE_KEYSTORE_BASE64 }}
+          ZTE_KEYSTORE_PASSWORD: ${{ secrets.ZTE_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          if [ -z "$ZTE_KEYSTORE_BASE64" ] || [ -z "$ZTE_KEYSTORE_PASSWORD" ]; then
+            echo "Production signing secrets are required on main."
             exit 1
           fi
-          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee /tmp/apk-badging.txt
-          grep -q "package: name='com.malik.ztesmartmanager'" /tmp/apk-badging.txt
-          grep -q "versionName='${ZTE_VERSION_NAME}'" /tmp/apk-badging.txt
+          printf '%s' "$ZTE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/zte-smart-hai-release.jks"
+          chmod 600 "$RUNNER_TEMP/zte-smart-hai-release.jks"
+          echo "ZTE_SIGNING_STORE_FILE=$RUNNER_TEMP/zte-smart-hai-release.jks" >> "$GITHUB_ENV"
+          echo "ZTE_SIGNING_STORE_PASSWORD=$ZTE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "ZTE_SIGNING_KEY_ALIAS=zte-smart-hai" >> "$GITHUB_ENV"
+          echo "ZTE_SIGNING_KEY_PASSWORD=$ZTE_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+
+      - name: Build privately signed production APK
+        if: github.event_name != 'pull_request'
+        run: gradle :app:assembleRelease --stacktrace
+
+      - name: Normalize production artifact name
+        if: github.event_name != 'pull_request'
+        shell: bash
+        run: cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/ztesmart-honor200-test.apk
+
+      - name: Verify APK identity
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/release/ztesmart-honor200-test.apk"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$APK" | tee /tmp/ztesmart-signature.txt
+          "$ANDROID_HOME/build-tools/36.0.0/aapt" dump badging "$APK" | tee /tmp/ztesmart-badging.txt
+          grep -q "package: name='com.malik.ztesmartmanager'" /tmp/ztesmart-badging.txt
+          grep -q "versionName='${ZTE_VERSION_NAME}'" /tmp/ztesmart-badging.txt
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' /tmp/ztesmart-signature.txt | head -n1 | tr '[:lower:]' '[:upper:]' | tr -d ':[:space:]')
+            test "$ACTUAL_CERT" = "A40DA80A59D170CAA950CF15C18C454D47A39B26989D8B640ECD745BA71BF5DC"
+          fi
 
       - name: Upload Honor 200 update APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: zte-smart-hai-honor200-update
-          path: app/build/outputs/apk/release/app-release.apk
+          path: app/build/outputs/apk/release/ztesmart-honor200-test.apk
