@@ -1,37 +1,20 @@
-name: Tower Map Compatibility Fix
+name: Android Build
 
 on:
   push:
-    branches:
-      - feature/connect-performance-credentials-0.5.7
-
-permissions:
-  contents: write
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
-  fix-and-build:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     steps:
-      - name: Checkout feature branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: feature/connect-performance-credentials-0.5.7
-          fetch-depth: 0
-
-      - name: Apply compatibility fix
-        run: python3 scripts/fix_nearby_compat.py
-
-      - name: Commit source fix
-        shell: bash
-        run: |
-          git config user.name "Malik05255"
-          git config user.email "mmbbrr99@gmail.com"
-          git add app/src/main/java/com/malik/ztesmartmanager/core/tower/TowerLockEngine.kt
-          if ! git diff --cached --quiet; then
-            git commit -m "Preserve NearbyCell positional compatibility"
-            git push origin HEAD:feature/connect-performance-credentials-0.5.7
-          fi
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
