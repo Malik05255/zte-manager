@@ -14,13 +14,48 @@ import com.malik.ztesmartmanager.core.storage.RouterBackupIdentityGuard
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 
+data class ZteLoginBootstrap(
+    val profile: RouterProfile,
+    val snapshot: RouterSnapshot
+)
+
 class ZteRouterClient(private val routerAddress: String) {
     private val transport = ZteHttpTransport(routerAddress)
 
     var profile: RouterProfile = GenericZteProfile
         private set
 
+    /**
+     * Compatibility login path. It verifies the management session with a post-login identity read.
+     * The app's interactive login uses loginAndReadSnapshot() to combine that verification with the
+     * first telemetry read and save one complete router round-trip.
+     */
     suspend fun login(adminPassword: String): RouterProfile {
+        authenticate(adminPassword)
+        val identity = readRaw(IDENTITY_FIELDS)
+        verifyManagementSession(identity)
+        profile = resolveProfile(identity)
+        return profile
+    }
+
+    /**
+     * Fast verified bootstrap for the UI: auth GET -> login POST -> one post-login GET that both
+     * proves the management session and supplies the first real snapshot. No truth-first check is
+     * removed; the previous separate identity + snapshot GETs are simply merged.
+     */
+    suspend fun loginAndReadSnapshot(adminPassword: String): ZteLoginBootstrap {
+        authenticate(adminPassword)
+        val bootstrap = readRaw(GenericZteProfile.statusFields)
+        verifyManagementSession(bootstrap)
+        profile = resolveProfile(bootstrap)
+        val first = ZteSnapshotParser.parse(
+            json = bootstrap,
+            radioIdEncoding = profile.radioIdEncoding
+        )
+        return ZteLoginBootstrap(profile = profile, snapshot = first)
+    }
+
+    private suspend fun authenticate(adminPassword: String) {
         val auth = readRaw(setOf("LD", "wa_inner_version", "cr_version", "RD"))
         val ld = auth.optString("LD").trim()
         if (ld.isBlank()) throw ZteAuthenticationException("لم يُرجع الراوتر قيمة LD المطلوبة للمصادقة")
@@ -45,18 +80,20 @@ class ZteRouterClient(private val routerAddress: String) {
         if (result != "0" && !result.equals("success", true)) {
             throw ZteAuthenticationException("رفض الراوتر تسجيل الدخول")
         }
+    }
 
-        val identity = readRaw(IDENTITY_FIELDS)
+    private fun verifyManagementSession(identity: JSONObject) {
         val logInfo = identity.optString("loginfo").trim()
         if (logInfo.isNotBlank() && !logInfo.equals("ok", true)) {
             throw ZteAuthenticationException("قبل الراوتر الطلب لكن لم يتم إنشاء جلسة إدارة موثقة")
         }
+    }
 
+    private fun resolveProfile(identity: JSONObject): RouterProfile {
         val model = firstValue(identity, "device_name", "model_name", "product_name")
         val hardware = identity.optString("hardware_version").takeIf { it.isNotBlank() }
         val firmware = firstValue(identity, "wa_inner_version", "web_version", "cr_version")
-        profile = RouterProfileRegistry.resolve(model, hardware, firmware)
-        return profile
+        return RouterProfileRegistry.resolve(model, hardware, firmware)
     }
 
     suspend fun readSnapshot(): RouterSnapshot =
@@ -236,10 +273,6 @@ class ZteRouterClient(private val routerAddress: String) {
         )
     }
 
-    /**
-     * Empty LTE_LOCK_CELL_SET values are a known ZTE goform removal path.
-     * We still require read-back to become blank/zero before calling it successful.
-     */
     suspend fun clearCellLock(): OperationResult {
         if (!profile.capabilities.supportsCellLock) return unsupported("إزالة تثبيت الخلية")
         preflight("إزالة تثبيت الخلية") { it.cellLock }?.let { return it }
