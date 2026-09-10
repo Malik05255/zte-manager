@@ -1,7 +1,6 @@
 package com.malik.ztesmartmanager
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,101 +36,144 @@ private val ChromeNavy = Color(0xFF0A2C67)
 private val ChromeBlue = Color(0xFF1478F8)
 private val ChromeGreen = Color(0xFF15C986)
 private val ChromeMuted = Color(0xFF667590)
-private val ChromeBorder = Color(0xFFE7EDF5)
+private val ChromeSoft = Color(0xFFF0F5FB)
+private val ChromeSoftGreen = Color(0xFFEAFBF4)
 
+/** One header is shared by every production section to avoid a size/inset jump on Honor 200. */
 @Composable
 fun HaiSharedHeader(
     connected: Boolean,
     onDisconnect: () -> Unit,
-    onMenu: () -> Unit
+    onMenu: () -> Unit,
+    onSettings: () -> Unit = {},
+    onSearch: () -> Unit = {}
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .height(68.dp)
-                .padding(horizontal = 18.dp)
+                .height(66.dp)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "☰",
-                color = ChromeNavy,
-                fontSize = 25.sp,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier
-                    .align(Alignment.CenterStart)
-                    .clickable(onClick = onMenu)
-                    .padding(4.dp)
-            )
-
-            Text(
-                text = "ZTE Smart HAI",
-                color = ChromeNavy,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Black,
-                modifier = Modifier.align(Alignment.Center)
-            )
-
             Row(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .height(38.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.White)
-                    .border(1.dp, ChromeBorder, RoundedCornerShape(20.dp))
-                    .clickable(enabled = connected, onClick = onDisconnect)
-                    .padding(horizontal = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ChromeCircle("⚙", onSettings)
+                ChromeCircle("⌕", onSearch)
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
                 Text(
-                    text = if (connected) "متصل" else "غير متصل",
+                    text = "ZTE Smart HAI",
                     color = ChromeNavy,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    maxLines = 1
                 )
-                Box(
-                    Modifier.size(9.dp).background(
-                        if (connected) ChromeGreen else Color(0xFFE15363),
-                        CircleShape
+                Text(
+                    text = "إدارة شبكتك ... بكل سهولة",
+                    color = ChromeMuted,
+                    fontSize = 8.sp,
+                    maxLines = 1
+                )
+            }
+
+            Row(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier
+                        .height(32.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (connected) ChromeSoftGreen else Color(0xFFFFEEEE))
+                        .clickable(enabled = connected, onClick = onDisconnect)
+                        .padding(horizontal = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        Modifier.size(7.dp).background(
+                            if (connected) ChromeGreen else Color(0xFFE15363),
+                            CircleShape
+                        )
                     )
+                    Text(
+                        text = if (connected) "متصل" else "غير متصل",
+                        color = ChromeNavy,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                }
+                Spacer(Modifier.width(7.dp))
+                Text(
+                    text = "☰",
+                    color = ChromeNavy,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.clickable(onClick = onMenu).padding(2.dp)
                 )
             }
         }
     }
 }
 
+@Composable
+private fun ChromeCircle(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(32.dp)
+            .clip(CircleShape)
+            .background(ChromeSoft)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = ChromeNavy, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+/** Reference navigation: المزيد، السجلات، الأدوات، الشبكة، الرئيسية. */
 @Composable
 fun HaiSharedBottomNav(
     selected: String,
     onHome: () -> Unit,
-    onStats: () -> Unit,
-    onMap: () -> Unit,
-    onSettings: () -> Unit,
+    onNetwork: () -> Unit,
+    onTools: () -> Unit,
+    onLogs: () -> Unit,
     onMore: () -> Unit
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Surface(
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().height(82.dp),
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding().height(70.dp),
             color = Color.White,
-            shadowElevation = 9.dp
+            shadowElevation = 8.dp,
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
         ) {
             Row(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 5.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                HaiSharedNavItem("☰", "المزيد", selected == "more", Modifier.weight(1f), onMore)
-                HaiSharedNavItem("⚙", "الإعدادات", selected == "settings", Modifier.weight(1f), onSettings)
-                HaiSharedNavItem("⌖", "الخريطة", selected == "map", Modifier.weight(1f), onMap)
-                HaiSharedNavItem("▥", "الإحصائيات", selected == "stats", Modifier.weight(1f), onStats)
-                HaiSharedNavItem("⌂", "الرئيسية", selected == "home", Modifier.weight(1f), onHome)
+                ChromeNavItem("☰", "المزيد", selected == "more", Modifier.weight(1f), onMore)
+                ChromeNavItem("▤", "السجلات", selected == "logs", Modifier.weight(1f), onLogs)
+                ChromeNavItem("⚒", "الأدوات", selected == "tools", Modifier.weight(1f), onTools)
+                ChromeNavItem("▥", "الشبكة", selected == "network", Modifier.weight(1f), onNetwork)
+                ChromeNavItem("⌂", "الرئيسية", selected == "home", Modifier.weight(1f), onHome)
             }
         }
     }
 }
 
 @Composable
-private fun HaiSharedNavItem(
+private fun ChromeNavItem(
     icon: String,
     title: String,
     selected: Boolean,
@@ -139,21 +181,21 @@ private fun HaiSharedNavItem(
     onClick: () -> Unit
 ) {
     Column(
-        modifier = modifier.clickable(onClick = onClick).padding(vertical = 2.dp),
+        modifier = modifier.clickable(onClick = onClick).padding(vertical = 1.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = icon,
             color = if (selected) ChromeBlue else ChromeMuted,
-            fontSize = 22.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(2.dp))
         Text(
             text = title,
             color = if (selected) ChromeBlue else ChromeMuted,
-            fontSize = 10.sp,
+            fontSize = 7.5.sp,
             fontWeight = if (selected) FontWeight.Black else FontWeight.Medium,
             maxLines = 1
         )
