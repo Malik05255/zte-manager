@@ -25,7 +25,7 @@ class PostLockVerificationAnalyzerTest {
         assertEquals(3, report.exactRadioMatches)
         assertEquals(1, report.unknownSamples)
         assertEquals(0, report.driftSamples)
-        assertEquals(0x12345, report.stableCellId)
+        assertEquals(0x12345L, report.stableCellId)
         assertEquals(-90.0, report.medianRsrp ?: 0.0, 0.001)
     }
 
