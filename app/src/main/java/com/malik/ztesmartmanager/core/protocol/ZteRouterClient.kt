@@ -15,25 +15,42 @@ class ZteRouterClient(routerAddress: String) {
         private set
 
     suspend fun login(adminPassword: String): RouterProfile {
-        val ldJson = readRaw(setOf("LD"))
-        val ld = ldJson.optString("LD")
+        // MC801A-family web UIs obtain these values before login. LD is required for the
+        // password challenge; WA/CR/RD allow us to include the same AD proof used by the
+        // stock UI on firmwares that expose it.
+        val auth = readRaw(setOf("LD", "wa_inner_version", "cr_version", "RD"))
+        val ld = auth.optString("LD").trim()
         if (ld.isBlank()) throw ZteAuthenticationException("لم يُرجع الراوتر قيمة LD المطلوبة للمصادقة")
 
-        val passwordHash = ZteCrypto.loginPassword(adminPassword, ld)
-        val loginJson = transport.getJson(
-            path = SET_PATH,
-            params = mapOf(
-                "isTest" to "false",
-                "goformId" to "LOGIN",
-                "password" to passwordHash
-            )
+        val loginParams = linkedMapOf(
+            "isTest" to "false",
+            "goformId" to "LOGIN",
+            "password" to ZteCrypto.loginPassword(adminPassword, ld)
         )
 
-        if (loginJson.optString("result") != "0") {
+        val wa = auth.optString("wa_inner_version").trim()
+        val cr = auth.optString("cr_version").trim()
+        val rd = auth.optString("RD").trim()
+        if (wa.isNotBlank() && cr.isNotBlank() && rd.isNotBlank()) {
+            loginParams["AD"] = ZteCrypto.adValue(wa, cr, rd)
+        }
+
+        // goform_set_cmd_process is a POST endpoint in the router web UI. Using GET here can
+        // appear to work on permissive firmware while silently failing on stricter builds.
+        val loginRaw = transport.postForm(SET_PATH, loginParams)
+        val loginJson = runCatching { JSONObject(loginRaw) }
+            .getOrElse { throw ZteAuthenticationException("رد تسجيل الدخول غير صالح") }
+        val result = loginJson.optString("result").trim()
+        if (result != "0" && !result.equals("success", true)) {
             throw ZteAuthenticationException("رفض الراوتر تسجيل الدخول")
         }
 
         val identity = readRaw(IDENTITY_FIELDS)
+        val logInfo = identity.optString("loginfo").trim()
+        if (logInfo.isNotBlank() && !logInfo.equals("ok", true)) {
+            throw ZteAuthenticationException("قبل الراوتر الطلب لكن لم يتم إنشاء جلسة إدارة موثقة")
+        }
+
         val model = firstValue(identity, "device_name", "model_name", "product_name")
         val hardware = identity.optString("hardware_version").takeIf { it.isNotBlank() }
         val firmware = firstValue(identity, "wa_inner_version", "web_version", "cr_version")
