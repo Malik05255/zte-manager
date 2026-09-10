@@ -5,7 +5,7 @@ import com.malik.ztesmartmanager.core.tower.PersistedTowerGuardState
 import com.malik.ztesmartmanager.core.tower.PersistedTowerGuardStateCodec
 import com.malik.ztesmartmanager.core.tower.TowerTarget
 
-/** Local-only persisted Tower Guard intent keyed by router address. */
+/** Local-only persisted Tower Guard intent keyed by the exact router address. */
 class TowerGuardStateStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(
         PREFS_NAME,
@@ -47,7 +47,7 @@ class TowerGuardStateStore(context: Context) {
         preferences.edit().remove(key(routerAddress)).apply()
     }
 
-    private fun key(routerAddress: String): String = "router_${routerAddress.hashCode()}"
+    private fun key(routerAddress: String): String = "router_$routerAddress"
 
     companion object {
         private const val PREFS_NAME = "zte_verified_tower_guard_state_v1"
