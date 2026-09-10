@@ -129,6 +129,34 @@ fun RuntimeAwareFinalDashboard(
         return false
     }
 
+    fun verifiedNrBand(): Int? {
+        val current = snapshot ?: return null
+        val nrVerified = current.raw["_zte_nr_active_verified"].equals("true", ignoreCase = true)
+        if (!nrVerified) return null
+        return Regex("\\d+").find(current.nrBand.orEmpty())?.value?.toIntOrNull()
+    }
+
+    fun nrWritePreflightPassed(): Boolean {
+        val currentBand = verifiedNrBand()
+        if (currentBand == null) {
+            Toast.makeText(
+                context,
+                "تم رفض أمر 5G قبل الإرسال: لا توجد قراءة حية موثقة تثبت أن 5G متصل الآن",
+                Toast.LENGTH_LONG
+            ).show()
+            return false
+        }
+        if (currentBand !in selectedNr) {
+            Toast.makeText(
+                context,
+                "تم رفض أمر 5G قبل الإرسال: التردد النشط N$currentBand غير موجود ضمن اختيارك",
+                Toast.LENGTH_LONG
+            ).show()
+            return false
+        }
+        return true
+    }
+
     val effectiveCapabilities = capabilities.copy(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
@@ -171,7 +199,11 @@ fun RuntimeAwareFinalDashboard(
         onLteToggle = onLteToggle,
         onNrToggle = onNrToggle,
         onApplyLte = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onApplyLte() },
-        onApplyNr = { if (!blocked(RuntimeAction.NR_BAND_WRITE)) onApplyNr() },
+        onApplyNr = {
+            if (!blocked(RuntimeAction.NR_BAND_WRITE) && nrWritePreflightPassed()) {
+                onApplyNr()
+            }
+        },
         onSetNetworkMode = { mode ->
             if (!blocked(RuntimeAction.NETWORK_MODE_WRITE)) onSetNetworkMode(mode)
         },
