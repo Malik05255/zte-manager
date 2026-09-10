@@ -1,6 +1,7 @@
 package com.malik.ztesmartmanager.core.tower
 
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
+import com.malik.ztesmartmanager.core.protocol.CellLockState
 import com.malik.ztesmartmanager.core.protocol.ZteRouterClient
 import kotlinx.coroutines.delay
 import org.json.JSONArray
@@ -42,8 +43,9 @@ data class NearbyCell(
 /**
  * Verified tower/cell control.
  *
- * A write acknowledgement is not proof of a lock. We require the router to read back the exact
- * lock keys before the app is allowed to say that a tower/cell is locked or enable Tower Guard.
+ * A write acknowledgement is not proof of a lock. We require exact lock-key read-back and a live
+ * serving-cell match. Any user-requested switch to another LTE cell is transactional: the previous
+ * cell-lock state is read first and restored automatically if the target cannot be verified.
  */
 class TowerLockEngine(
     private val client: ZteRouterClient
@@ -83,38 +85,83 @@ class TowerLockEngine(
 
     suspend fun lockCurrent(snapshot: RouterSnapshot): TowerGuardStatus {
         val target = captureCurrent(snapshot)
-            ?: error("لا توجد هوية LTE موثقة كافية لتثبيت البرج: نحتاج PCI و EARFCN")
+            ?: error("لا توجد هوية LTE موثقة كافية لتثبيت الخلية: نحتاج PCI و EARFCN")
+        return applyTargetTransaction(target)
+    }
 
-        val operation = client.setCellLock(target.pci, target.earfcn)
-        if (!operation.success) {
-            return TowerGuardStatus(target, TowerMatch.UNKNOWN, 0, false, operation.message)
-        }
-        if (!operation.verified) {
+    suspend fun lockNearbyCell(cell: NearbyCell): TowerGuardStatus {
+        require(cell.rat.equals("LTE", true)) { "Cell Lock الحالي موثق لـLTE فقط" }
+        val pci = cell.pci ?: error("الخلية القريبة لا تحتوي PCI موثوقًا")
+        val earfcn = cell.arfcn ?: error("الخلية القريبة لا تحتوي EARFCN موثوقًا")
+        val target = TowerTarget(
+            pci = pci,
+            earfcn = earfcn,
+            band = cell.band,
+            cellId = null,
+            enodebId = null
+        )
+        return applyTargetTransaction(target)
+    }
+
+    private suspend fun applyTargetTransaction(target: TowerTarget): TowerGuardStatus {
+        val previous = client.readCellLockState()
+            ?: return TowerGuardStatus(
+                target,
+                TowerMatch.UNKNOWN,
+                0,
+                false,
+                "لن يغيّر التطبيق الخلية: تعذر قراءة حالة Cell Lock الأصلية اللازمة للاستعادة الآمنة"
+            )
+
+        val operation = runCatching { client.setCellLock(target.pci, target.earfcn) }.getOrNull()
+        if (operation?.success != true || !operation.verified) {
+            val restored = restore(previous)
             return TowerGuardStatus(
                 target,
                 TowerMatch.UNKNOWN,
                 0,
                 false,
-                "قبل الراوتر أمر القفل، لكن لم يعطِ read-back مطابقًا؛ لذلك لن يعتبره التطبيق قفلًا مؤكدًا ولن يشغّل Tower Guard"
+                if (restored) {
+                    "لم يثبت read-back القفل المطلوب؛ تمت استعادة حالة القفل الأصلية"
+                } else {
+                    "لم يثبت read-back القفل المطلوب وتعذر تأكيد الاستعادة؛ راجع Cell Lock في الراوتر"
+                }
             )
         }
 
-        delay(1_200)
+        delay(TARGET_SETTLE_MS)
         val after = runCatching { client.readSnapshot() }.getOrNull()
         val match = after?.let { compare(target, it) } ?: TowerMatch.UNKNOWN
-        consecutiveDriftSamples = 0
+        if (match == TowerMatch.MATCHED) {
+            consecutiveDriftSamples = 0
+            return TowerGuardStatus(
+                target,
+                match,
+                0,
+                false,
+                "تم حفظ Cell Lock والتحقق من أن الخلية الحية تطابق PCI/EARFCN المطلوبين"
+            )
+        }
+
+        val restored = restore(previous)
+        val reason = when (match) {
+            TowerMatch.RADIO_MATCH_ID_CHANGED -> "تطابق PCI/EARFCN لكن تغيّرت هوية Cell ID/eNodeB"
+            TowerMatch.DRIFTED -> "الراوتر لم يبقَ على PCI/EARFCN المطلوبين"
+            TowerMatch.UNKNOWN -> "لم تتوفر قراءة حية كافية بعد القفل"
+            TowerMatch.MATCHED -> ""
+        }
         return TowerGuardStatus(
-            target = target,
-            match = match,
-            consecutiveDriftSamples = 0,
-            repaired = false,
-            message = when (match) {
-                TowerMatch.MATCHED -> "تم حفظ القفل وقراءته مرة أخرى، والخلية الحالية تطابق الهدف"
-                TowerMatch.RADIO_MATCH_ID_CHANGED -> "القفل محفوظ، لكن Cell ID/eNodeB لا يطابق الهوية الأصلية؛ لن يدّعي التطبيق ثبات البرج الفيزيائي"
-                TowerMatch.DRIFTED -> "القفل محفوظ في الراوتر لكن الخلية الحية لا تطابق الهدف"
-                TowerMatch.UNKNOWN -> "القفل محفوظ، لكن بيانات الخلية الحية غير كافية للتحقق"
-            }
+            target,
+            match,
+            0,
+            false,
+            if (restored) "$reason؛ تمت استعادة حالة Cell Lock الأصلية" else "$reason؛ وتعذر تأكيد الاستعادة"
         )
+    }
+
+    private suspend fun restore(previous: CellLockState): Boolean {
+        val result = runCatching { client.restoreCellLock(previous) }.getOrNull()
+        return result?.success == true && result.verified
     }
 
     suspend fun guardOnce(target: TowerTarget, snapshot: RouterSnapshot): TowerGuardStatus {
@@ -157,13 +204,22 @@ class TowerLockEngine(
         )
     }
 
-    /** Read-only discovery. Unsupported firmware returns no cells rather than fabricated data. */
+    /**
+     * Read-only discovery. Only cells with PCI + ARFCN are returned because anything less cannot
+     * be uniquely targeted by the verified LTE cell-lock command.
+     */
     suspend fun readNearbyCells(): List<NearbyCell> {
         val raw = client.readRaw(setOf("neighbor_cell_info", "current_cell_info", "locked_cell_info"))
         return buildList {
             addAll(parseCellArray(raw.opt("current_cell_info")))
             addAll(parseCellArray(raw.opt("neighbor_cell_info")))
-        }.distinctBy { Triple(it.rat, it.pci, it.arfcn) }
+        }
+            .filter { it.pci != null && it.arfcn != null }
+            .distinctBy { Triple(it.rat, it.pci, it.arfcn) }
+            .sortedWith(
+                compareByDescending<NearbyCell> { it.rsrp ?: Double.NEGATIVE_INFINITY }
+                    .thenByDescending { it.sinr ?: Double.NEGATIVE_INFINITY }
+            )
     }
 
     private fun parseCellArray(value: Any?): List<NearbyCell> {
@@ -214,6 +270,7 @@ class TowerLockEngine(
     }
 
     companion object {
+        private const val TARGET_SETTLE_MS = 2_000L
         private const val DRIFT_SAMPLES_BEFORE_REPAIR = 3
         private const val REPAIR_COOLDOWN_MS = 30_000L
     }
