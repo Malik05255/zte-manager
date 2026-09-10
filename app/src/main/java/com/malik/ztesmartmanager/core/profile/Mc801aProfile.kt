@@ -5,6 +5,9 @@ import com.malik.ztesmartmanager.core.model.RouterCapabilities
 object Mc801aProfile : RouterProfile {
     override val id: String = "zte-mc801a"
 
+    /** Legacy MC801A goform exposes PCI/Cell ID tokens as hexadecimal, including digit-only tokens. */
+    override val radioIdEncoding: RadioIdEncoding = RadioIdEncoding.HEX_FIRST
+
     override val capabilities = RouterCapabilities(
         modelFamily = "MC801A / MC801A1",
         supportsLteBandLock = true,
