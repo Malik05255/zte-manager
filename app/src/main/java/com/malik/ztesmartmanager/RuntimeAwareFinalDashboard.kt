@@ -3,21 +3,30 @@ package com.malik.ztesmartmanager
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -30,6 +39,8 @@ import com.malik.ztesmartmanager.core.model.RouterCapabilities
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
 import com.malik.ztesmartmanager.core.model.RuntimeCapabilityReport
 import com.malik.ztesmartmanager.core.model.RuntimeCapabilityState
+import com.malik.ztesmartmanager.core.presentation.RuntimeCapabilityDetail
+import com.malik.ztesmartmanager.core.presentation.RuntimeCapabilityDetailsPresenter
 import com.malik.ztesmartmanager.core.protocol.RuntimeAction
 import com.malik.ztesmartmanager.core.protocol.RuntimeCapabilityAccess
 import com.malik.ztesmartmanager.core.protocol.runtimeCapabilitiesFromSnapshot
@@ -47,6 +58,7 @@ private val RuntimeBarMuted = Color(0xFF776E63)
 private val RuntimeBarGoldDeep = Color(0xFF876126)
 private val RuntimeBarGood = Color(0xFF567D5B)
 private val RuntimeBarWarn = Color(0xFFA96432)
+private val RuntimeBarLine = Color(0xFFD2C8B9)
 
 /**
  * Runtime-capability shell around the premium dashboard.
@@ -100,6 +112,7 @@ fun RuntimeAwareFinalDashboard(
     val runtime = remember(snapshot?.raw, capabilities) {
         snapshot?.let { runtimeCapabilitiesFromSnapshot(capabilities, it.raw) }
     }
+    var detailsExpanded by rememberSaveable { mutableStateOf(false) }
 
     fun blocked(action: RuntimeAction): Boolean {
         val report = runtime ?: run {
@@ -123,7 +136,18 @@ fun RuntimeAwareFinalDashboard(
             .fillMaxSize()
             .background(Color(0xFFF0ECE4))
     ) {
-        RuntimeCapabilityBar(runtime, Modifier.fillMaxWidth())
+        RuntimeCapabilityBar(
+            report = runtime,
+            expanded = detailsExpanded,
+            onToggle = { if (runtime != null) detailsExpanded = !detailsExpanded },
+            modifier = Modifier.fillMaxWidth()
+        )
+        if (detailsExpanded && runtime != null) {
+            RuntimeCapabilityDetails(
+                report = runtime,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         Box(Modifier.weight(1f)) {
             FinalDashboard(
                 snapshot = snapshot,
@@ -193,9 +217,16 @@ fun RuntimeAwareFinalDashboard(
 }
 
 @Composable
-private fun RuntimeCapabilityBar(report: RuntimeCapabilityReport?, modifier: Modifier = Modifier) {
+private fun RuntimeCapabilityBar(
+    report: RuntimeCapabilityReport?,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
     Card(
-        modifier = modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = modifier
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .clickable(enabled = report != null, onClick = onToggle),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = RuntimeBarBg)
     ) {
@@ -207,7 +238,7 @@ private fun RuntimeCapabilityBar(report: RuntimeCapabilityReport?, modifier: Mod
                         if (report == null) {
                             "جاري جمع دليل read-back..."
                         } else {
-                            "${RuntimeCapabilityAccess.writeReadyCount(report)}/${RuntimeCapabilityAccess.writeActionCount()} مسارات كتابة آمنة"
+                            "${RuntimeCapabilityAccess.writeReadyCount(report)}/${RuntimeCapabilityAccess.writeActionCount()} مسارات كتابة جاهزة للمحاولة • ${if (expanded) "إخفاء التفاصيل" else "اضغط للتفاصيل"}"
                         },
                         color = RuntimeBarMuted,
                         fontSize = 7.sp
@@ -236,13 +267,83 @@ private fun RuntimeCapabilityBar(report: RuntimeCapabilityReport?, modifier: Mod
 }
 
 @Composable
-private fun RuntimeStateChip(label: String, state: RuntimeCapabilityState, modifier: Modifier) {
-    val (text, color) = when (state) {
-        RuntimeCapabilityState.SAFE_TO_ATTEMPT -> "آمن" to RuntimeBarGood
-        RuntimeCapabilityState.READ_ONLY -> "قراءة" to RuntimeBarGoldDeep
-        RuntimeCapabilityState.PROFILE_ONLY -> "Profile" to RuntimeBarWarn
-        RuntimeCapabilityState.UNAVAILABLE -> "غير متاح" to RuntimeBarMuted
+private fun RuntimeCapabilityDetails(report: RuntimeCapabilityReport, modifier: Modifier = Modifier) {
+    val details = remember(report) { RuntimeCapabilityDetailsPresenter.from(report) }
+    Card(
+        modifier = modifier.padding(horizontal = 10.dp, vertical = 1.dp),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = RuntimeBarBg)
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            Text("تفاصيل دليل الـFirmware", color = RuntimeBarInk, fontSize = 10.sp, fontWeight = FontWeight.Black)
+            Text(
+                "«جاهز للمحاولة» لا يعني نجاح الأمر مسبقًا؛ قبل أي كتابة يعيد التطبيق probe جديدًا ثم لا يعلن النجاح إلا بعد read-back مطابق.",
+                color = RuntimeBarMuted,
+                fontSize = 7.sp
+            )
+            Text(
+                "المعروض هنا أسماء حقول الإثبات فقط، وليس قيمها. لا تُعرض كلمة المرور أو auth/token أو IMSI/IMEI/ICCID/PIN/PUK.",
+                color = RuntimeBarMuted,
+                fontSize = 7.sp
+            )
+            Spacer(Modifier.size(5.dp))
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 245.dp),
+                contentPadding = PaddingValues(bottom = 2.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)
+            ) {
+                items(details, key = { it.key }) { detail ->
+                    RuntimeCapabilityDetailRow(detail)
+                }
+            }
+        }
     }
+}
+
+@Composable
+private fun RuntimeCapabilityDetailRow(detail: RuntimeCapabilityDetail) {
+    val color = runtimeStateColor(detail.state)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, color.copy(alpha = 0.28f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                detail.title,
+                color = RuntimeBarInk,
+                fontSize = 8.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.weight(1f)
+            )
+            Text(detail.accessKind, color = RuntimeBarMuted, fontSize = 6.sp)
+            Spacer(Modifier.size(6.dp))
+            Text(detail.stateLabel, color = color, fontSize = 7.sp, fontWeight = FontWeight.Black)
+        }
+        Text(detail.reason, color = RuntimeBarMuted, fontSize = 6.sp)
+        if (detail.evidenceFields.isNotEmpty()) {
+            Text(
+                "الدليل: ${detail.evidenceFields.joinToString(" • ")}",
+                color = RuntimeBarGoldDeep,
+                fontSize = 6.sp,
+                maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
+private fun RuntimeStateChip(label: String, state: RuntimeCapabilityState, modifier: Modifier) {
+    val text = when (state) {
+        RuntimeCapabilityState.SAFE_TO_ATTEMPT -> "جاهز"
+        RuntimeCapabilityState.READ_ONLY -> "قراءة"
+        RuntimeCapabilityState.PROFILE_ONLY -> "Profile"
+        RuntimeCapabilityState.UNAVAILABLE -> "غير متاح"
+    }
+    val color = runtimeStateColor(state)
     Box(
         modifier = modifier
             .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(12.dp))
@@ -254,4 +355,11 @@ private fun RuntimeStateChip(label: String, state: RuntimeCapabilityState, modif
             Text(text, color = color, fontSize = 6.sp, textAlign = TextAlign.Center, maxLines = 1)
         }
     }
+}
+
+private fun runtimeStateColor(state: RuntimeCapabilityState): Color = when (state) {
+    RuntimeCapabilityState.SAFE_TO_ATTEMPT -> RuntimeBarGood
+    RuntimeCapabilityState.READ_ONLY -> RuntimeBarGoldDeep
+    RuntimeCapabilityState.PROFILE_ONLY -> RuntimeBarWarn
+    RuntimeCapabilityState.UNAVAILABLE -> RuntimeBarMuted
 }
