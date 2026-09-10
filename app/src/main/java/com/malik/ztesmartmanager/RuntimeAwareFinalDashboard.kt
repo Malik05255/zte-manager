@@ -47,6 +47,7 @@ import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityReport
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetryHistory
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetrySample
 import com.malik.ztesmartmanager.core.diagnostics.SupportBundleBuilder
+import com.malik.ztesmartmanager.core.diagnostics.ThermalTelemetryParser
 import com.malik.ztesmartmanager.core.diagnostics.TrafficTelemetry
 import com.malik.ztesmartmanager.core.diagnostics.TrafficTelemetryFormatter
 import com.malik.ztesmartmanager.core.diagnostics.TrafficTelemetryParser
@@ -138,6 +139,7 @@ fun RuntimeAwareFinalDashboard(
     }
     val stability = remember(telemetrySamples) { ConnectionStabilityAnalyzer.analyze(telemetrySamples) }
     val traffic = remember(snapshot?.raw) { snapshot?.let { TrafficTelemetryParser.parse(it.raw) } }
+    val thermal = remember(snapshot?.raw) { snapshot?.let { ThermalTelemetryParser.parse(it.raw) } }
 
     val supportBundle = remember(snapshot, runtime, telemetrySamples, stability, capabilities.modelFamily) {
         SupportBundleBuilder.build(
@@ -204,6 +206,13 @@ fun RuntimeAwareFinalDashboard(
             innerVerticalDp = layout.trafficInnerVerticalDp,
             modifier = Modifier.fillMaxWidth()
         )
+        thermal?.takeIf { it.hasAnyEvidence }?.let {
+            ThermalTelemetryCard(
+                telemetry = it,
+                compact = layout.compact,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
         SignalHistoryCard(
             samples = telemetrySamples,
             modifier = Modifier.fillMaxWidth(),

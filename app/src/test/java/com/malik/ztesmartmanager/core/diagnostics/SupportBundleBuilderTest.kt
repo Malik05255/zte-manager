@@ -20,7 +20,7 @@ class SupportBundleBuilderTest {
     }
 
     @Test
-    fun supportBundle_capsHistoryAtThirtySamplesAndIncludesObservedTraffic() {
+    fun supportBundle_capsHistoryAndIncludesObservedReadOnlyTelemetry() {
         val samples = (0 until 45).map { index ->
             SafeTelemetrySampleFactory.from(snapshot(), timestampEpochMs = index.toLong())
         }
@@ -36,7 +36,7 @@ class SupportBundleBuilderTest {
         val root = JSONObject(bundle)
         val array = root.getJSONArray("telemetry_history")
 
-        assertEquals(2, root.getInt("schema_version"))
+        assertEquals(3, root.getInt("schema_version"))
         assertEquals(30, array.length())
         assertEquals(15L, array.getJSONObject(0).getLong("timestamp_epoch_ms"))
         assertEquals(44L, array.getJSONObject(29).getLong("timestamp_epoch_ms"))
@@ -48,11 +48,18 @@ class SupportBundleBuilderTest {
         assertEquals(250000L, traffic.getLong("tx_bytes_per_second"))
         assertEquals(7340032000L, traffic.getLong("monthly_rx_bytes"))
         assertEquals(1048576000L, traffic.getLong("monthly_tx_bytes"))
+
+        val thermal = root.getJSONObject("thermal")
+        val readings = thermal.getJSONArray("readings")
+        assertEquals(3, readings.length())
+        assertEquals("PA1", thermal.getJSONObject("highest_observed").getString("label"))
+        assertEquals(74.0, thermal.getJSONObject("highest_observed").getDouble("celsius"), 0.0)
+        assertEquals("raw sensor readings only; no safety threshold inferred", thermal.getString("interpretation"))
     }
 
     @Test
-    fun supportBundle_omitsTrafficSectionWhenRouterExposesNoTrafficEvidence() {
-        val noTraffic = snapshot().copy(
+    fun supportBundle_omitsOptionalTelemetryWhenRouterExposesNoEvidence() {
+        val noOptionalTelemetry = snapshot().copy(
             raw = mapOf(
                 "_zte_nr_active_verified" to "true",
                 "_zte_ca_verified" to "true"
@@ -63,7 +70,7 @@ class SupportBundleBuilderTest {
             SupportBundleBuilder.build(
                 appVersion = "test",
                 modelFamily = "MC801A",
-                snapshot = noTraffic,
+                snapshot = noOptionalTelemetry,
                 runtime = null,
                 history = emptyList(),
                 generatedAtEpochMs = 100L
@@ -71,6 +78,7 @@ class SupportBundleBuilderTest {
         )
 
         assertFalse(root.has("traffic"))
+        assertFalse(root.has("thermal"))
     }
 
     private fun snapshot() = RouterSnapshot(
@@ -97,7 +105,10 @@ class SupportBundleBuilderTest {
             "realtime_tx_bytes" to "52428800",
             "realtime_time" to "3600",
             "monthly_rx_bytes" to "7340032000",
-            "monthly_tx_bytes" to "1048576000"
+            "monthly_tx_bytes" to "1048576000",
+            "pm_modem_5g" to "71",
+            "pm_sensor_mdm" to "73",
+            "pm_sensor_pa1" to "74"
         )
     )
 }
