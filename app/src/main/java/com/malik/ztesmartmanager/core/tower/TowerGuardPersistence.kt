@@ -117,11 +117,13 @@ object TowerGuardResumeVerifier {
         }
     }
 
-    /** null means the field was not exposed; blank/0/0x0 means explicitly unlocked. */
+    /**
+     * null/blank are unknown because JSONObject.optString cannot distinguish an absent field from
+     * some firmware returning an empty token. Explicit numeric zero is positive unlocked evidence.
+     */
     private fun strictConfiguredLockValue(value: String?): Int? {
-        if (value == null) return null
-        val text = value.trim()
-        if (text.isBlank() || text == "0" || text.equals("0x0", true)) return 0
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (text == "0" || text.equals("0x0", true)) return 0
         if (!text.all { it.isDigit() }) return null
         return text.toIntOrNull()?.takeIf { it >= 0 }
     }
