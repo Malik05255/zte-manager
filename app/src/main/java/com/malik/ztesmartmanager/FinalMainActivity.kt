@@ -42,8 +42,10 @@ import com.malik.ztesmartmanager.core.tower.TowerMatch
 import com.malik.ztesmartmanager.core.tower.TowerRecommendationEngine
 import com.malik.ztesmartmanager.core.tower.TowerTarget
 import com.malik.ztesmartmanager.core.tower.VerifiedTowerLockCoordinator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class FinalMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -112,9 +114,10 @@ private fun FinalManagerApp() {
 
     androidx.compose.runtime.LaunchedEffect(credentialStore) {
         if (!credentialsLoaded) {
-            credentialStore.load()?.let { saved ->
-                routerAddress = saved.routerAddress
-                password = saved.password
+            val saved = withContext(Dispatchers.IO) { credentialStore.load() }
+            saved?.let {
+                routerAddress = it.routerAddress
+                password = it.password
                 rememberPassword = true
             }
             credentialsLoaded = true
@@ -155,8 +158,9 @@ private fun FinalManagerApp() {
             status = "جاري الاتصال..."
             runCatching {
                 val newClient = ZteRouterClient(routerAddress)
-                val profile = newClient.login(password)
-                val first = newClient.readSnapshot()
+                val bootstrap = newClient.loginAndReadSnapshot(password)
+                val profile = bootstrap.profile
+                val first = bootstrap.snapshot
                 val newTowerEngine = TowerLockEngine(newClient)
                 client = newClient
                 towerEngine = newTowerEngine
@@ -174,7 +178,10 @@ private fun FinalManagerApp() {
                 poorSamples = 0
 
                 if (rememberPassword) {
-                    if (!credentialStore.save(routerAddress, password)) {
+                    val saved = withContext(Dispatchers.IO) {
+                        credentialStore.save(routerAddress, password)
+                    }
+                    if (!saved) {
                         operationMessage = "تم الاتصال، لكن تعذر حفظ كلمة المرور بشكل آمن على هذا الجهاز"
                     }
                 } else {
