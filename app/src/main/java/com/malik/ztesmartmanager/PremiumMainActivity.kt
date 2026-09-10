@@ -15,8 +15,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import com.malik.ztesmartmanager.core.model.RouterSettingsBackup
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
 import com.malik.ztesmartmanager.core.protocol.ZteRouterClient
 import com.malik.ztesmartmanager.core.smart.NetworkPerformance
@@ -26,6 +28,7 @@ import com.malik.ztesmartmanager.core.smart.OptimizationGoal
 import com.malik.ztesmartmanager.core.smart.PlacementReading
 import com.malik.ztesmartmanager.core.smart.SmartBandOptimizer
 import com.malik.ztesmartmanager.core.smart.SmartOptimizationReport
+import com.malik.ztesmartmanager.core.storage.RouterBackupStore
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -76,7 +79,37 @@ private fun PremiumManagerApp() {
     var speedBusy by remember { mutableStateOf(false) }
     var lastPerformance by remember { mutableStateOf<NetworkPerformance?>(null) }
     val performanceProbe = remember { NetworkPerformanceProbe() }
+    val context = LocalContext.current
+    val backupStore = remember(context) { RouterBackupStore(context) }
+    var latestSafetyBackup by remember { mutableStateOf<RouterSettingsBackup?>(null) }
     val scope = rememberCoroutineScope()
+
+    suspend fun captureSafetyBackup(
+        connected: ZteRouterClient,
+        canRestore: (RouterSettingsBackup) -> Boolean,
+        unavailableMessage: String
+    ): RouterSettingsBackup? {
+        operationMessage = "حفظ نسخة أمان قبل التغيير..."
+        val backup = runCatching { connected.captureSettingsBackup(routerAddress) }
+            .getOrElse {
+                operationMessage = "تم إيقاف التغيير: تعذر حفظ نسخة أمان (${it.message.orEmpty()})"
+                return null
+            }
+        if (!canRestore(backup)) {
+            operationMessage = "تم إيقاف التغيير: $unavailableMessage"
+            return null
+        }
+        backupStore.save(backup)
+        latestSafetyBackup = backup
+        return backup
+    }
+
+    suspend fun refreshAfterControl(connected: ZteRouterClient) {
+        delay(800)
+        snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
+        selectedLte = snapshot?.let(::premiumCurrentLteBands).orEmpty()
+        selectedNr = snapshot?.let(::premiumCurrentNrBands).orEmpty()
+    }
 
     fun connect() {
         if (connectBusy || password.isBlank() || routerAddress.isBlank()) return
@@ -91,6 +124,7 @@ private fun PremiumManagerApp() {
                 snapshot = first
                 selectedLte = premiumCurrentLteBands(first)
                 selectedNr = premiumCurrentNrBands(first)
+                latestSafetyBackup = backupStore.latest(routerAddress)
                 placementEngine.reset()
                 placementReading = placementEngine.add(first)
                 smartBaseline = monitorScorer.score(first).total
@@ -99,6 +133,7 @@ private fun PremiumManagerApp() {
             }.onFailure {
                 client = null
                 snapshot = null
+                latestSafetyBackup = null
                 status = it.message ?: "تعذر الاتصال بالراوتر"
             }
             connectBusy = false
@@ -110,6 +145,16 @@ private fun PremiumManagerApp() {
         if (smartBusy || controlBusy) return
         scope.launch {
             smartBusy = true
+            val backup = captureSafetyBackup(
+                connected,
+                canRestore = { it.canRestoreLteBands },
+                unavailableMessage = "الراوتر لم يعرض قناع LTE أصليًا غير فارغ يمكن إرجاعه حرفيًا"
+            )
+            if (backup == null) {
+                smartBusy = false
+                return@launch
+            }
+
             operationMessage = if (manual) "جاري البحث عن أفضل إعداد للشبكة..." else "رصدنا تدهورًا مستمرًا؛ بدأ التحسين الذكي..."
             runCatching {
                 SmartBandOptimizer(connected).optimizeOnce(smartGoal) { operationMessage = it }
@@ -191,6 +236,7 @@ private fun PremiumManagerApp() {
         controlBusy = controlBusy,
         speedBusy = speedBusy,
         lastPerformance = lastPerformance,
+        safetyBackupAvailable = latestSafetyBackup != null,
         onDisconnect = {
             client = null
             snapshot = null
@@ -199,6 +245,7 @@ private fun PremiumManagerApp() {
             placementReading = null
             smartReport = null
             lastPerformance = null
+            latestSafetyBackup = null
             status = "غير متصل"
         },
         onSpeedTest = {
@@ -230,51 +277,77 @@ private fun PremiumManagerApp() {
         onApplyLte = {
             if (selectedLte.isNotEmpty() && !controlBusy) scope.launch {
                 controlBusy = true
-                operationMessage = connected.setLteBands(selectedLte).message
-                delay(900)
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.canRestoreLteBands },
+                    unavailableMessage = "لا يوجد LTE mask أصلي موثوق يمكن استعادته؛ لم يتم تغيير الترددات"
+                )
+                if (backup != null) {
+                    operationMessage = connected.setLteBands(selectedLte).message
+                    refreshAfterControl(connected)
+                }
                 controlBusy = false
             }
         },
         onAllowAllLte = {
-            if (!controlBusy) {
-                selectedLte = capabilities.supportedLteBands
-                scope.launch {
-                    controlBusy = true
+            if (!controlBusy) scope.launch {
+                controlBusy = true
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.canRestoreLteBands },
+                    unavailableMessage = "لا يوجد LTE mask أصلي موثوق يمكن استعادته؛ لم يتم تغيير الترددات"
+                )
+                if (backup != null) {
+                    selectedLte = capabilities.supportedLteBands
                     operationMessage = connected.setLteBands(capabilities.supportedLteBands).message
-                    delay(900)
-                    snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
-                    controlBusy = false
+                    refreshAfterControl(connected)
                 }
+                controlBusy = false
             }
         },
         onApplyNr = {
             if (selectedNr.isNotEmpty() && !controlBusy) scope.launch {
                 controlBusy = true
-                operationMessage = connected.setNrBands(selectedNr).message
-                delay(900)
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.canRestoreNrBands },
+                    unavailableMessage = "قناع 5G الأصلي غير متاح بشكل يسمح باستعادته دون تخمين"
+                )
+                if (backup != null) {
+                    operationMessage = connected.setNrBands(selectedNr).message
+                    refreshAfterControl(connected)
+                }
                 controlBusy = false
             }
         },
         onAllowAllNr = {
-            if (!controlBusy) {
-                selectedNr = capabilities.supportedNrBands
-                scope.launch {
-                    controlBusy = true
+            if (!controlBusy) scope.launch {
+                controlBusy = true
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.canRestoreNrBands },
+                    unavailableMessage = "قناع 5G الأصلي غير متاح بشكل يسمح باستعادته دون تخمين"
+                )
+                if (backup != null) {
+                    selectedNr = capabilities.supportedNrBands
                     operationMessage = connected.setNrBands(capabilities.supportedNrBands).message
-                    delay(900)
-                    snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
-                    controlBusy = false
+                    refreshAfterControl(connected)
                 }
+                controlBusy = false
             }
         },
         onSetNetworkMode = { mode ->
             if (!controlBusy) scope.launch {
                 controlBusy = true
-                operationMessage = connected.setNetworkMode(mode).message
-                delay(700)
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.canRestoreNetworkMode },
+                    unavailableMessage = "BearerPreference الأصلي غير ظاهر؛ لن نغيّر وضع الشبكة دون مسار رجوع"
+                )
+                if (backup != null) {
+                    operationMessage = connected.setNetworkMode(mode).message
+                    refreshAfterControl(connected)
+                }
                 controlBusy = false
             }
         },
@@ -283,7 +356,51 @@ private fun PremiumManagerApp() {
             val earfcn = snapshot?.earfcn
             if (pci != null && earfcn != null && !controlBusy) scope.launch {
                 controlBusy = true
-                operationMessage = connected.setCellLock(pci, earfcn).message
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.hasCompleteCellLockState },
+                    unavailableMessage = "حالة Cell Lock الأصلية غير مكتملة؛ لن نثبت الخلية دون مسار استعادة"
+                )
+                if (backup != null) {
+                    val clearPathVerified = if (backup.cellWasUnlocked) connected.clearCellLock().verified else true
+                    if (!clearPathVerified) {
+                        operationMessage = "تم إيقاف Cell Lock: الـFirmware لم يثبت أن إزالة القفل تعمل على جهازك"
+                    } else {
+                        operationMessage = connected.setCellLock(pci, earfcn).message
+                    }
+                    refreshAfterControl(connected)
+                }
+                controlBusy = false
+            }
+        },
+        onClearCellLock = {
+            if (!controlBusy) scope.launch {
+                controlBusy = true
+                val backup = captureSafetyBackup(
+                    connected,
+                    canRestore = { it.hasCompleteCellLockState },
+                    unavailableMessage = "حالة Cell Lock الأصلية غير مكتملة؛ لم يتم إرسال أمر الإزالة"
+                )
+                if (backup != null) {
+                    operationMessage = connected.clearCellLock().message
+                    refreshAfterControl(connected)
+                }
+                controlBusy = false
+            }
+        },
+        onRestoreSafetyBackup = {
+            val backup = latestSafetyBackup ?: backupStore.latest(routerAddress)
+            if (backup != null && !controlBusy) scope.launch {
+                controlBusy = true
+                operationMessage = "جاري استعادة آخر نسخة أمان والتحقق..."
+                val report = runCatching { connected.restoreSettings(backup) }
+                    .getOrElse {
+                        operationMessage = "تعذر تنفيذ الاستعادة: ${it.message.orEmpty()}"
+                        controlBusy = false
+                        return@launch
+                    }
+                operationMessage = report.message
+                refreshAfterControl(connected)
                 controlBusy = false
             }
         },
