@@ -15,7 +15,7 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".PremiumMainActivity"
+            android:name=".ReferenceMainActivity"
             android:exported="true"
             android:screenOrientation="unspecified">
             <intent-filter>
