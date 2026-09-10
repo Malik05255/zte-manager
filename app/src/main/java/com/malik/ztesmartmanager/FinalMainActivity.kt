@@ -30,7 +30,10 @@ import com.malik.ztesmartmanager.core.smart.SmartBandOptimizer
 import com.malik.ztesmartmanager.core.smart.SmartOptimizationReport
 import com.malik.ztesmartmanager.core.storage.RouterBackupStore
 import com.malik.ztesmartmanager.core.storage.TowerFingerprintStore
+import com.malik.ztesmartmanager.core.storage.TowerGuardStateStore
 import com.malik.ztesmartmanager.core.tower.NearbyCell
+import com.malik.ztesmartmanager.core.tower.PersistedTowerGuardState
+import com.malik.ztesmartmanager.core.tower.TowerGuardResumeVerifier
 import com.malik.ztesmartmanager.core.tower.TowerGuardStatus
 import com.malik.ztesmartmanager.core.tower.TowerLockEngine
 import com.malik.ztesmartmanager.core.tower.TowerMatch
@@ -98,6 +101,7 @@ private fun FinalManagerApp() {
     val context = LocalContext.current
     val backupStore = remember(context) { RouterBackupStore(context) }
     val fingerprintStore = remember(context) { TowerFingerprintStore(context) }
+    val guardStateStore = remember(context) { TowerGuardStateStore(context) }
     var latestSafetyBackup by remember { mutableStateOf<RouterSettingsBackup?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -153,19 +157,54 @@ private fun FinalManagerApp() {
                 smartBaseline = monitorScorer.score(first).total
                 poorSamples = 0
 
-                val savedFingerprint = fingerprintStore.latest(routerAddress, profile.id)
-                val fingerprintMatch = savedFingerprint?.let { newTowerEngine.compare(it.toTarget(), first) }
-                status = when (fingerprintMatch) {
-                    TowerMatch.MATCHED -> "متصل • ${profile.capabilities.modelFamily} • على البصمة المحفوظة"
-                    TowerMatch.RADIO_MATCH_ID_CHANGED -> "متصل • ${profile.capabilities.modelFamily} • PCI/EARFCN يطابقان بصمة محفوظة لكن هوية الخلية تغيّرت"
-                    TowerMatch.DRIFTED -> "متصل • ${profile.capabilities.modelFamily} • توجد بصمة خلية محفوظة غير نشطة الآن"
-                    TowerMatch.UNKNOWN -> "متصل • ${profile.capabilities.modelFamily} • توجد بصمة محفوظة لكن لا يمكن التحقق منها الآن"
-                    null -> "متصل • ${profile.capabilities.modelFamily}"
+                val savedGuardState = guardStateStore.load(routerAddress)
+                val lockReadBack = if (savedGuardState != null) {
+                    runCatching { newClient.readRaw(setOf("lte_pci_lock", "lte_earfcn_lock")) }.getOrNull()
+                } else null
+                val liveMatch = savedGuardState?.let { newTowerEngine.compare(it.target, first) }
+                val resumeDecision = TowerGuardResumeVerifier.decide(
+                    saved = savedGuardState,
+                    currentRouterAddress = routerAddress,
+                    currentProfileId = profile.id,
+                    configuredPci = lockReadBack?.optString("lte_pci_lock"),
+                    configuredEarfcn = lockReadBack?.optString("lte_earfcn_lock"),
+                    liveMatch = liveMatch
+                )
+                if (resumeDecision.discardPersistedState) guardStateStore.clear(routerAddress)
+                towerTarget = resumeDecision.target
+                towerGuardEnabled = resumeDecision.enableGuard
+                towerGuardStatus = resumeDecision.target?.let { target ->
+                    TowerGuardStatus(
+                        target = target,
+                        match = liveMatch ?: TowerMatch.UNKNOWN,
+                        consecutiveDriftSamples = 0,
+                        repaired = false,
+                        message = resumeDecision.message
+                    )
+                }
+
+                val baseStatus = "متصل • ${profile.capabilities.modelFamily}"
+                if (savedGuardState != null) {
+                    status = "$baseStatus • ${resumeDecision.message}"
+                    operationMessage = resumeDecision.message
+                } else {
+                    val savedFingerprint = fingerprintStore.latest(routerAddress, profile.id)
+                    val fingerprintMatch = savedFingerprint?.let { newTowerEngine.compare(it.toTarget(), first) }
+                    status = when (fingerprintMatch) {
+                        TowerMatch.MATCHED -> "$baseStatus • على البصمة المحفوظة"
+                        TowerMatch.RADIO_MATCH_ID_CHANGED -> "$baseStatus • PCI/EARFCN يطابقان بصمة محفوظة لكن هوية الخلية تغيّرت"
+                        TowerMatch.DRIFTED -> "$baseStatus • توجد بصمة خلية محفوظة غير نشطة الآن"
+                        TowerMatch.UNKNOWN -> "$baseStatus • توجد بصمة محفوظة لكن لا يمكن التحقق منها الآن"
+                        null -> baseStatus
+                    }
                 }
             }.onFailure {
                 client = null
                 towerEngine = null
                 snapshot = null
+                towerTarget = null
+                towerGuardEnabled = false
+                towerGuardStatus = null
                 status = it.message ?: "تعذر الاتصال بالراوتر"
             }
             connectBusy = false
@@ -213,6 +252,7 @@ private fun FinalManagerApp() {
         scope.launch {
             controlBusy = true
             towerGuardEnabled = false
+            guardStateStore.setGuardRequested(routerAddress, false)
 
             val backup = captureSafetyBackup(
                 connected,
@@ -253,6 +293,12 @@ private fun FinalManagerApp() {
                     message = result.message
                 )
                 fingerprintStore.save(result.fingerprint)
+                guardStateStore.saveVerifiedTarget(
+                    routerAddress = routerAddress,
+                    profileId = connected.profile.id,
+                    target = result.target,
+                    guardRequested = false
+                )
                 operationMessage = "${result.message} • يمكنك تشغيل حارس البرج الآن"
             } else {
                 towerTarget = null
@@ -261,6 +307,7 @@ private fun FinalManagerApp() {
 
                 operationMessage = if (result.writeAttempted) {
                     val rollback = runCatching { connected.restoreSettings(backup) }.getOrNull()
+                    if (rollback?.verified != true) guardStateStore.clear(routerAddress)
                     when {
                         rollback?.verified == true -> "${result.message} • أُعيدت إعدادات ما قبل المحاولة وتم التحقق منها"
                         rollback != null -> "${result.message} • محاولة الرجوع: ${rollback.message}"
@@ -486,6 +533,8 @@ private fun FinalManagerApp() {
         onClearCellLock = {
             if (!controlBusy) scope.launch {
                 controlBusy = true
+                towerGuardEnabled = false
+                guardStateStore.setGuardRequested(routerAddress, false)
                 val backup = captureSafetyBackup(
                     connected,
                     { it.hasCompleteCellLockState },
@@ -498,6 +547,7 @@ private fun FinalManagerApp() {
                         towerTarget = null
                         towerGuardEnabled = false
                         towerGuardStatus = null
+                        guardStateStore.clear(routerAddress)
                     }
                     refreshAfterControl(connected)
                 }
@@ -505,11 +555,73 @@ private fun FinalManagerApp() {
             }
         },
         onTowerGuardChange = { enabled ->
-            if (enabled && towerTarget == null) {
-                operationMessage = "ثبّت خلية وتحقق منها أولًا قبل تشغيل حارس البرج"
+            if (!enabled) {
+                towerGuardEnabled = false
+                guardStateStore.setGuardRequested(routerAddress, false)
+                operationMessage = "تم إيقاف حارس البرج • قفل الراوتر نفسه لم يتغير"
             } else {
-                towerGuardEnabled = enabled
-                operationMessage = if (enabled) "حارس البرج يعمل على PCI/EARFCN الموثّقين" else "تم إيقاف حارس البرج"
+                val target = towerTarget
+                val engine = towerEngine
+                if (target == null || engine == null) {
+                    operationMessage = "ثبّت خلية وتحقق منها أولًا قبل تشغيل حارس البرج"
+                } else if (!controlBusy) {
+                    scope.launch {
+                        operationMessage = "إعادة التحقق من القفل والخلية قبل تشغيل حارس البرج..."
+                        val lockReadBack = runCatching {
+                            connected.readRaw(setOf("lte_pci_lock", "lte_earfcn_lock"))
+                        }.getOrNull()
+                        val latest = runCatching { connected.readSnapshot() }.getOrNull()
+                        if (latest != null) snapshot = latest
+                        val liveMatch = latest?.let { engine.compare(target, it) }
+                        val candidateState = PersistedTowerGuardState(
+                            routerAddress = routerAddress,
+                            profileId = connected.profile.id,
+                            target = target,
+                            guardRequested = true,
+                            savedAtEpochMs = System.currentTimeMillis()
+                        )
+                        val decision = TowerGuardResumeVerifier.decide(
+                            saved = candidateState,
+                            currentRouterAddress = routerAddress,
+                            currentProfileId = connected.profile.id,
+                            configuredPci = lockReadBack?.optString("lte_pci_lock"),
+                            configuredEarfcn = lockReadBack?.optString("lte_earfcn_lock"),
+                            liveMatch = liveMatch
+                        )
+
+                        if (decision.discardPersistedState) {
+                            guardStateStore.clear(routerAddress)
+                        } else if (decision.enableGuard) {
+                            guardStateStore.save(candidateState)
+                        } else if (decision.target != null) {
+                            guardStateStore.saveVerifiedTarget(
+                                routerAddress,
+                                connected.profile.id,
+                                decision.target,
+                                false
+                            )
+                        } else {
+                            guardStateStore.setGuardRequested(routerAddress, false)
+                        }
+
+                        towerTarget = decision.target
+                        towerGuardEnabled = decision.enableGuard
+                        towerGuardStatus = decision.target?.let { verifiedTarget ->
+                            TowerGuardStatus(
+                                target = verifiedTarget,
+                                match = liveMatch ?: TowerMatch.UNKNOWN,
+                                consecutiveDriftSamples = 0,
+                                repaired = false,
+                                message = decision.message
+                            )
+                        }
+                        operationMessage = if (decision.enableGuard) {
+                            "${decision.message} • المراقبة تعمل فقط أثناء تشغيل التطبيق"
+                        } else {
+                            decision.message
+                        }
+                    }
+                }
             }
         },
         onRestoreSafetyBackup = {
@@ -517,6 +629,7 @@ private fun FinalManagerApp() {
             if (backup != null && !controlBusy) scope.launch {
                 controlBusy = true
                 towerGuardEnabled = false
+                guardStateStore.setGuardRequested(routerAddress, false)
                 operationMessage = "جاري استعادة آخر نسخة أمان والتحقق..."
                 val report = runCatching { connected.restoreSettings(backup) }
                     .getOrElse {
@@ -528,6 +641,7 @@ private fun FinalManagerApp() {
                 if (report.verified) {
                     towerTarget = null
                     towerGuardStatus = null
+                    guardStateStore.clear(routerAddress)
                 }
                 refreshAfterControl(connected)
                 controlBusy = false
