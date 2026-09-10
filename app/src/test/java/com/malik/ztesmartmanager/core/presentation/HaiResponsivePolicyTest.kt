@@ -7,58 +7,58 @@ import org.junit.Test
 
 class HaiResponsivePolicyTest {
     @Test
-    fun compactPhone_keepsBoundedReadableScaleAndStacksColumns() {
+    fun compactPhone_neverShrinksTypographyAndStacksContent() {
         val spec = HaiResponsivePolicy.resolve(360, 800)
         assertEquals(HaiSizeClass.COMPACT, spec.sizeClass)
         assertFalse(spec.twoColumn)
-        assertTrue(spec.textScale >= 0.92f)
-        assertTrue(spec.scale >= 0.84f)
-        assertTrue(spec.networkCardHeightDp >= 230)
-        assertTrue(spec.bottomBarHeightDp >= 72)
+        assertTrue(spec.textScale >= 1.00f)
+        assertTrue(spec.scale >= 0.88f)
+        assertTrue(spec.networkCardHeightDp >= 250)
+        assertTrue(spec.bottomBarHeightDp >= 76)
     }
 
     @Test
-    fun smallModernPhone_390x844_reflowsInsteadOfCrushingReferenceColumns() {
+    fun smallModernPhone_390x844_reflowsInsteadOfCrushingContent() {
         val spec = HaiResponsivePolicy.resolve(390, 844)
         assertEquals(HaiSizeClass.STANDARD, spec.sizeClass)
         assertFalse(spec.twoColumn)
-        assertTrue(spec.networkCardHeightDp >= 232)
-        assertTrue(spec.speedCardHeightDp >= 214)
-        assertTrue(spec.textScale >= 0.92f)
+        assertTrue(spec.networkCardHeightDp >= 260)
+        assertTrue(spec.speedCardHeightDp >= 250)
+        assertTrue(spec.textScale >= 1.00f)
     }
 
     @Test
-    fun referencePhone_430x932_preservesReferenceTypographyWithoutForcedSplit() {
+    fun referencePhone_430x932_usesReadableMobileRhythm() {
         val spec = HaiResponsivePolicy.resolve(430, 932)
         assertEquals(HaiSizeClass.STANDARD, spec.sizeClass)
         assertFalse(spec.twoColumn)
         assertFalse(spec.denseHeader)
         assertTrue(spec.scale in 0.99f..1.01f)
         assertTrue(spec.textScale in 0.99f..1.01f)
-        assertEquals(12, spec.horizontalPaddingDp)
-        assertEquals(10, spec.sectionGapDp)
-        assertEquals(24, spec.cardRadiusDp)
-        assertEquals(246, spec.networkCardHeightDp)
-        assertEquals(226, spec.speedCardHeightDp)
+        assertEquals(16, spec.horizontalPaddingDp)
+        assertEquals(16, spec.sectionGapDp)
+        assertEquals(28, spec.cardRadiusDp)
+        assertEquals(270, spec.networkCardHeightDp)
+        assertEquals(264, spec.speedCardHeightDp)
         assertEquals(84, spec.bottomBarHeightDp)
     }
 
     @Test
-    fun largePhone_412x915_usesSpaceButStillAvoidsUnsafeTwoColumnCompression() {
+    fun largePhone_412x915_usesAvailableSpaceWithoutTinyText() {
         val spec = HaiResponsivePolicy.resolve(412, 915)
         assertEquals(HaiSizeClass.STANDARD, spec.sizeClass)
         assertFalse(spec.twoColumn)
-        assertTrue(spec.textScale in 0.92f..1.10f)
+        assertTrue(spec.textScale in 1.00f..1.14f)
         assertTrue(spec.networkCardHeightDp >= spec.speedCardHeightDp)
     }
 
     @Test
-    fun wideFoldable_usesReferenceTwoColumnCompositionOnlyWhenCardsHaveRoom() {
+    fun wideFoldable_usesTwoColumnsOnlyWhenCardsHaveRoom() {
         val spec = HaiResponsivePolicy.resolve(600, 960)
         assertEquals(HaiSizeClass.LARGE, spec.sizeClass)
         assertTrue(spec.twoColumn)
         assertEquals(spec.networkCardHeightDp, spec.speedCardHeightDp)
-        assertTrue(spec.networkCardHeightDp >= 230)
+        assertTrue(spec.networkCardHeightDp >= 248)
     }
 
     @Test
@@ -72,7 +72,7 @@ class HaiResponsivePolicyTest {
         val spec = HaiResponsivePolicy.resolve(720, 1280)
         assertEquals(HaiSizeClass.LARGE, spec.sizeClass)
         assertTrue(spec.twoColumn)
-        assertTrue(spec.scale <= 1.16f)
-        assertTrue(spec.textScale <= 1.10f)
+        assertTrue(spec.scale <= 1.18f)
+        assertTrue(spec.textScale <= 1.14f)
     }
 }
