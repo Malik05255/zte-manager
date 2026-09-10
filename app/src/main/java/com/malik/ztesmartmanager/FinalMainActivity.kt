@@ -332,7 +332,7 @@ private fun FinalManagerApp() {
 
     val capabilities = connected.profile.capabilities
 
-    FinalDashboard(
+    RuntimeAwareFinalDashboard(
         snapshot = snapshot,
         capabilities = capabilities,
         status = status,
