@@ -6,12 +6,6 @@ import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 
-/**
- * Physical-tower oriented identity for LTE.
- *
- * ZTE's verified legacy MC801A write command accepts PCI + EARFCN. Cell ID/eNodeB are therefore
- * used as identity/verification evidence, not falsely claimed as writable lock keys.
- */
 data class TowerTarget(
     val pci: Int,
     val earfcn: Int,
@@ -46,12 +40,11 @@ data class NearbyCell(
 )
 
 /**
- * Tower lock policy learned from mature CPE tools:
- * 1) identify the current serving cell,
- * 2) apply only a command verified for this profile,
- * 3) read back and verify,
- * 4) monitor for drift,
- * 5) re-assert only after repeated drift and with a cooldown (no ping-pong).
+ * Verified tower/cell control.
+ *
+ * The legacy MC801A command can lock only PCI + EARFCN. Cell ID/eNodeB are retained as
+ * observational identity evidence, never presented as writable keys when the firmware cannot
+ * write them. Guard repair requires repeated drift plus a cooldown to avoid ping-pong.
  */
 class TowerLockEngine(
     private val client: ZteRouterClient
@@ -91,19 +84,15 @@ class TowerLockEngine(
         return TowerMatch.MATCHED
     }
 
-    suspend fun lockCurrent(snapshot: RouterSnapshot = client.readSnapshot()): TowerGuardStatus {
+    suspend fun lockCurrent(): TowerGuardStatus = lockCurrent(client.readSnapshot())
+
+    suspend fun lockCurrent(snapshot: RouterSnapshot): TowerGuardStatus {
         val target = captureCurrent(snapshot)
-            ?: error("لا توجد هوية LTE كافية لتثبيت البرج: نحتاج PCI و EARFCN")
+            ?: error("لا توجد هوية LTE موثقة كافية لتثبيت البرج: نحتاج PCI و EARFCN")
 
         val operation = client.setCellLock(target.pci, target.earfcn)
         if (!operation.success) {
-            return TowerGuardStatus(
-                target = target,
-                match = TowerMatch.UNKNOWN,
-                consecutiveDriftSamples = 0,
-                repaired = false,
-                message = operation.message
-            )
+            return TowerGuardStatus(target, TowerMatch.UNKNOWN, 0, false, operation.message)
         }
 
         delay(1_200)
@@ -116,27 +105,23 @@ class TowerLockEngine(
             consecutiveDriftSamples = 0,
             repaired = false,
             message = when (match) {
-                TowerMatch.MATCHED -> "تم تثبيت الخلية والتحقق من بقاء الراوتر على البرج المختار"
-                TowerMatch.RADIO_MATCH_ID_CHANGED -> "تم تثبيت PCI/EARFCN، لكن Cell ID/eNodeB تغيّر؛ لا يمكن ضمان البرج الفيزيائي بهذا الـFirmware"
+                TowerMatch.MATCHED -> "تم تثبيت الخلية والتحقق من بقاء الراوتر على الهدف"
+                TowerMatch.RADIO_MATCH_ID_CHANGED -> "PCI/EARFCN ثابتان لكن هوية Cell ID/eNodeB تغيّرت؛ لن يدّعي التطبيق أن البرج الفيزيائي ثابت"
                 TowerMatch.DRIFTED -> "قبل الراوتر أمر القفل لكنه لم يبقَ على الخلية المطلوبة"
-                TowerMatch.UNKNOWN -> "قبل الراوتر الأمر، لكن لا توجد قراءة كافية للتحقق من البرج"
+                TowerMatch.UNKNOWN -> "قبل الراوتر الأمر، لكن التحقق اللاحق غير كافٍ"
             }
         )
     }
 
-    /**
-     * One Tower Guard iteration. Call from the app polling loop while guard is enabled.
-     * Repair is deliberately bounded: three consecutive drift samples + 30 s cooldown.
-     */
     suspend fun guardOnce(target: TowerTarget, snapshot: RouterSnapshot): TowerGuardStatus {
         val match = compare(target, snapshot)
         if (match == TowerMatch.MATCHED) {
             consecutiveDriftSamples = 0
-            return TowerGuardStatus(target, match, 0, false, "البرج ثابت")
+            return TowerGuardStatus(target, match, 0, false, "الخلية المستهدفة موثقة وثابتة")
         }
 
         if (match == TowerMatch.UNKNOWN) {
-            return TowerGuardStatus(target, match, consecutiveDriftSamples, false, "تعذر التحقق مؤقتًا؛ لن يرسل التطبيق أوامر عمياء")
+            return TowerGuardStatus(target, match, consecutiveDriftSamples, false, "تعذر التحقق مؤقتًا؛ لن يرسل التطبيق أمرًا عشوائيًا")
         }
 
         consecutiveDriftSamples++
@@ -148,7 +133,7 @@ class TowerLockEngine(
                 match,
                 consecutiveDriftSamples,
                 false,
-                if (match == TowerMatch.RADIO_MATCH_ID_CHANGED) "PCI/EARFCN متطابقان لكن هوية البرج تغيّرت" else "اكتُشف انتقال عن البرج المختار"
+                if (match == TowerMatch.RADIO_MATCH_ID_CHANGED) "تغيّرت هوية البرج رغم تطابق PCI/EARFCN" else "اكتُشف انتقال عن الخلية المستهدفة"
             )
         }
 
@@ -157,18 +142,15 @@ class TowerLockEngine(
         consecutiveDriftSamples = 0
         val repaired = operation?.success == true
         return TowerGuardStatus(
-            target = target,
-            match = match,
-            consecutiveDriftSamples = 0,
-            repaired = repaired,
-            message = if (repaired) "أعاد Tower Guard تثبيت الخلية المطلوبة" else "تعذر على Tower Guard إعادة تثبيت الخلية"
+            target,
+            match,
+            0,
+            repaired,
+            if (repaired) "أعاد Tower Guard تطبيق القفل الموثق" else "تعذر على Tower Guard إعادة تطبيق القفل"
         )
     }
 
-    /**
-     * Safe, read-only neighbor discovery. Some newer ZTE goform firmwares expose these arrays;
-     * MC801A variants that do not support them simply return empty/absent values.
-     */
+    /** Read-only discovery. Unsupported firmware returns no cells rather than fabricated data. */
     suspend fun readNearbyCells(): List<NearbyCell> {
         val raw = client.readRaw(setOf("neighbor_cell_info", "current_cell_info", "locked_cell_info"))
         return buildList {
@@ -190,12 +172,12 @@ class TowerLockEngine(
                 val rat = item.optString("rat").trim()
                 val rawBand = item.optString("band").trim().takeIf { it.isNotBlank() }
                 val arfcn = positiveInt(item, "fcn") ?: positiveInt(item, "earfcn")
-                val isNr = rat == "16" || (arfcn ?: 0) > 65_535 || rawBand?.startsWith("N", true) == true || rawBand?.startsWith("NR", true) == true
-                val band = normalizeBand(rawBand, isNr)
+                val isNr = rat == "16" || (arfcn ?: 0) > 65_535 ||
+                    rawBand?.startsWith("N", true) == true || rawBand?.startsWith("NR", true) == true
                 add(
                     NearbyCell(
                         rat = if (isNr) "NR" else "LTE",
-                        band = band,
+                        band = normalizeBand(rawBand, isNr),
                         pci = positiveInt(item, "pci"),
                         arfcn = arfcn,
                         rsrp = signal(item, "rsrp", -170.0, -35.0),
@@ -214,9 +196,7 @@ class TowerLockEngine(
         var value = item.optString(key).replace(Regex("[^0-9.\\-]"), "").toDoubleOrNull() ?: return null
         repeat(3) {
             if (value in min..max) return value
-            val scaled = value / 10.0
-            if (scaled !in min..max && kotlin.math.abs(scaled) >= kotlin.math.abs(value)) return null
-            value = scaled
+            value /= 10.0
         }
         return value.takeIf { it in min..max }
     }
