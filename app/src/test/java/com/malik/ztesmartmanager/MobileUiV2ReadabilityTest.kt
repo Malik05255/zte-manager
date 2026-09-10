@@ -19,12 +19,28 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun responsivePolicy_neverShrinksTypographyBelowDesignedSize() {
+    fun responsivePolicy_isWidthDrivenAndDoesNotInflateTallPhones() {
         val policy = File("src/main/java/com/malik/ztesmartmanager/core/presentation/HaiResponsivePolicy.kt").readText()
+        assertTrue(policy.contains("REFERENCE_WIDTH_DP = 393"))
+        assertTrue(policy.contains("widthScale.coerceIn(1.00f, 1.08f)"))
         assertTrue(
-            "يجب أن يبقى الحد الأدنى لـ textScale مساويًا 1.00",
-            policy.contains("coerceIn(1.00f, 1.14f)")
+            "يجب ألا يدخل heightScale في تكبير واجهة الهاتف الطويل",
+            !policy.contains("val heightScale")
         )
+    }
+
+    @Test
+    fun productionShell_usesOneSizingProvider() {
+        val sizing = File("src/main/java/com/malik/ztesmartmanager/HaiUiSizing.kt").readText()
+        val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
+        val login = File("src/main/java/com/malik/ztesmartmanager/ZteRouterLoginScreen.kt").readText()
+        val chrome = File("src/main/java/com/malik/ztesmartmanager/HaiSharedChrome.kt").readText()
+
+        assertTrue(sizing.contains("PHONE_DESIGN_WIDTH_DP = 393f"))
+        assertTrue(sizing.contains("LocalDensity provides controlledDensity"))
+        assertTrue(runtime.contains("HaiUiScaleProvider"))
+        assertTrue(login.contains("HaiUiScaleProvider"))
+        assertTrue(chrome.contains("LocalHaiUiMetrics.current"))
     }
 
     @Test
