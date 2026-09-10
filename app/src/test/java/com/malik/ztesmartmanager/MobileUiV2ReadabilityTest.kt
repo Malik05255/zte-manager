@@ -44,6 +44,32 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
+    fun v3Sections_takePaddingGapAndRadiusFromResponsiveContract() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()
+        assertTrue(source.contains("padding = spec.horizontalPaddingDp"))
+        assertTrue(source.contains("gap = spec.sectionGapDp"))
+        assertTrue(source.contains("cardRadius = spec.cardRadiusDp"))
+        assertTrue(source.contains("bottomBarHeight = spec.bottomBarHeightDp"))
+        assertTrue(source.contains("shape = RoundedCornerShape(layout.cardRadius.dp)"))
+        assertTrue(!source.contains("gap = if (height < 760)"))
+    }
+
+    @Test
+    fun homeRows_useReferenceHeightsInsteadOfStretchingWithPhoneHeight() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/TargetHomeDashboard.kt").readText()
+        assertTrue(source.contains("verticalScroll(rememberScrollState())"))
+        assertTrue(source.contains("height(151.dp)"))
+        assertTrue(source.contains("height(56.dp)"))
+        assertTrue(source.contains("height(131.dp)"))
+        assertTrue(source.contains("height(118.dp)"))
+        assertTrue(source.contains("height(92.dp)"))
+        assertTrue(!source.contains("weight(151f)"))
+        assertTrue(!source.contains("weight(131f)"))
+        assertTrue(!source.contains("weight(118f)"))
+        assertTrue(!source.contains("weight(92f)"))
+    }
+
+    @Test
     fun primaryTouchTargets_areAtLeastFiftyDp() {
         val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()
         assertTrue(source.contains("private fun M3Primary"))
