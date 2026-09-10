@@ -264,7 +264,6 @@ private fun FinalManagerApp() {
                 return@launch
             }
 
-            // If the router was already unlocked, prove that its unlock path works before risking a lock.
             val removalVerified = if (backup.cellWasUnlocked) {
                 runCatching { connected.clearCellLock() }.getOrNull()?.verified == true
             } else true
@@ -365,7 +364,7 @@ private fun FinalManagerApp() {
 
     val connected = client
     if (connected == null) {
-        PremiumLoginScreen(
+        RouterLoginScreenV2(
             routerAddress = routerAddress,
             onRouterAddressChange = { routerAddress = it },
             password = password,
