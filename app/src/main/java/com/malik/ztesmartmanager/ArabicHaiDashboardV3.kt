@@ -159,7 +159,8 @@ fun ArabicHaiDashboardV3(
             )
 
             if (snapshot != null && section == M3Section.HOME) {
-                ReferenceHomeDashboard(
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                    ReferenceHomeDashboard(
                     snapshot = snapshot,
                     telemetrySamples = telemetrySamples,
                     status = status,
@@ -176,7 +177,8 @@ fun ArabicHaiDashboardV3(
                     onNavigateBands = { section = M3Section.BANDS },
                     onNavigateTools = { section = M3Section.TOOLS },
                     onOptimizeNow = onOptimizeNow
-                )
+                    )
+                }
                 return@BoxWithConstraints
             }
 

@@ -97,12 +97,12 @@ fun ReferenceHomeDashboard(
         val designHeight = 699.dp
         val scaleX = maxWidth.value / designWidth.value
         val scaleY = maxHeight.value / designHeight.value
-        val uiScale = min(scaleX, scaleY)
+        val uiScale = scaleX
 
         Box(
             modifier = Modifier
                 .size(designWidth, designHeight)
-                .align(Alignment.Center)
+                .align(Alignment.TopCenter)
                 .scale(uiScale)
         ) {
             ReferenceDashboardContent(
