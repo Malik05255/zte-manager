@@ -1,0 +1,107 @@
+name: Fix reference dashboard direction and viewport
+
+on:
+  push:
+    branches:
+      - feature/connect-performance-credentials-0.5.7
+    paths:
+      - .github/workflows/fix-reference-layout.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/connect-performance-credentials-0.5.7
+      - name: Patch home layout
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('app/src/main/java/com/malik/ztesmartmanager/ReferenceHomeDashboard.kt')
+          s = p.read_text()
+          s = s.replace('import androidx.compose.runtime.Composable\n', 'import androidx.compose.runtime.Composable\nimport androidx.compose.runtime.CompositionLocalProvider\n')
+          s = s.replace('import androidx.compose.ui.Alignment\n', 'import androidx.compose.ui.Alignment\nimport androidx.compose.ui.platform.LocalLayoutDirection\n')
+          s = s.replace('import androidx.compose.ui.unit.Dp\n', 'import androidx.compose.ui.unit.Dp\nimport androidx.compose.ui.unit.LayoutDirection\n')
+          old = '''    BoxWithConstraints(
+        modifier = Modifier.fillMaxSize().background(RefPage).statusBarsPadding().navigationBarsPadding()
+    ) {
+        val designWidth = 393.dp
+        val designHeight = 699.dp
+        val scaleX = maxWidth.value / designWidth.value
+        val scaleY = maxHeight.value / designHeight.value
+        val uiScale = min(scaleX, scaleY)
+
+        Box(
+            modifier = Modifier
+                .size(designWidth, designHeight)
+                .align(Alignment.Center)
+                .scale(uiScale)
+        ) {
+            ReferenceDashboardContent(
+                snapshot = snapshot,
+                telemetrySamples = telemetrySamples,
+                status = status,
+                operationMessage = operationMessage,
+                lastPerformance = lastPerformance,
+                speedBusy = speedBusy,
+                controlBusy = controlBusy,
+                smartBusy = smartBusy,
+                onDisconnect = onDisconnect,
+                onSpeedTest = onSpeedTest,
+                onSetNetworkMode = onSetNetworkMode,
+                onNavigateNetwork = onNavigateNetwork,
+                onNavigateTowers = onNavigateTowers,
+                onNavigateBands = onNavigateBands,
+                onNavigateTools = onNavigateTools,
+                onOptimizeNow = onOptimizeNow
+            )
+        }
+    }'''
+          new = '''    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(RefPage)
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        ) {
+            ReferenceDashboardContent(
+                snapshot = snapshot,
+                telemetrySamples = telemetrySamples,
+                status = status,
+                operationMessage = operationMessage,
+                lastPerformance = lastPerformance,
+                speedBusy = speedBusy,
+                controlBusy = controlBusy,
+                smartBusy = smartBusy,
+                onDisconnect = onDisconnect,
+                onSpeedTest = onSpeedTest,
+                onSetNetworkMode = onSetNetworkMode,
+                onNavigateNetwork = onNavigateNetwork,
+                onNavigateTowers = onNavigateTowers,
+                onNavigateBands = onNavigateBands,
+                onNavigateTools = onNavigateTools,
+                onOptimizeNow = onOptimizeNow
+            )
+        }
+    }'''
+          if old not in s:
+              raise SystemExit('root layout block not found')
+          s = s.replace(old, new)
+          s = s.replace('import androidx.compose.foundation.layout.BoxWithConstraints\n', '')
+          s = s.replace('import androidx.compose.ui.draw.scale\n', '')
+          s = s.replace('import kotlin.math.max\n', '')
+          s = s.replace('import kotlin.math.min\n', '')
+          p.write_text(s)
+          PY
+      - name: Commit fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app/src/main/java/com/malik/ztesmartmanager/ReferenceHomeDashboard.kt
+          git commit -m "Fix home dashboard orientation and viewport"
+          git push origin HEAD:feature/connect-performance-credentials-0.5.7
