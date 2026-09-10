@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -57,11 +58,15 @@ private val THBg = Color(0xFFF7FAFE)
 private val THCard = Color.White
 private val THNavy = Color(0xFF0A2C67)
 private val THBlue = Color(0xFF1478F8)
-private val THBlue2 = Color(0xFF55B7FF)
+private val THCyan = Color(0xFF35C7E5)
 private val THGreen = Color(0xFF15C986)
+private val THSoftGreen = Color(0xFFEAFBF4)
 private val THMuted = Color(0xFF71809A)
-private val THSoft = Color(0xFFF2F6FB)
+private val THSoft = Color(0xFFF2F7FD)
 private val THBorder = Color(0xFFE7EDF5)
+private val THPurple = Color(0xFF9F63F4)
+private val THCardShape = RoundedCornerShape(18.dp)
+private val THSmallShape = RoundedCornerShape(13.dp)
 
 @Composable
 fun TargetHomeDashboard(
@@ -80,74 +85,97 @@ fun TargetHomeDashboard(
     onNavigateTowers: () -> Unit,
     onNavigateBands: () -> Unit,
     onNavigateTools: () -> Unit,
+    onNavigateLogs: () -> Unit,
+    onNavigateMore: () -> Unit,
+    onRefreshNow: () -> Unit,
     onOptimizeNow: () -> Unit
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         BoxWithConstraints(Modifier.fillMaxSize().background(THBg)) {
             val compact = maxWidth < 365.dp
-            val side = if (compact) 11.dp else 15.dp
-            val gap = if (compact) 6.dp else 8.dp
+            val side = if (compact) 10.dp else 12.dp
+            val gap = if (compact) 5.dp else 6.dp
 
             Column(Modifier.fillMaxSize()) {
                 HaiSharedHeader(
                     connected = status.contains("متصل") || snapshot.networkType != null,
                     onDisconnect = onDisconnect,
-                    onMenu = onNavigateTools
+                    onMenu = onNavigateMore,
+                    onSettings = onNavigateTools,
+                    onSearch = onNavigateTowers
                 )
 
                 Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(horizontal = side)
+                    modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = side)
                 ) {
-                    TargetHero(snapshot, Modifier.fillMaxWidth().weight(.31f))
+                    TargetHero(snapshot, Modifier.fillMaxWidth().weight(151f))
+                    Spacer(Modifier.height(gap))
+                    TargetSignalMetricsRow(snapshot, Modifier.fillMaxWidth().weight(56f))
                     Spacer(Modifier.height(gap))
 
                     Row(
-                        Modifier.fillMaxWidth().weight(.44f),
+                        modifier = Modifier.fillMaxWidth().weight(131f),
                         horizontalArrangement = Arrangement.spacedBy(gap)
                     ) {
-                        TargetSpeed(
+                        TargetSpeedCard(
                             performance = lastPerformance,
                             busy = speedBusy,
                             onSpeedTest = onSpeedTest,
+                            modifier = Modifier.weight(1.25f).fillMaxHeight()
+                        )
+                        TargetNetworkModeCard(
+                            snapshot = snapshot,
+                            busy = controlBusy,
+                            onSetNetworkMode = onSetNetworkMode,
                             modifier = Modifier.weight(1f).fillMaxHeight()
                         )
-                        Column(Modifier.weight(1f).fillMaxHeight()) {
-                            TargetNetworkMode(
-                                snapshot = snapshot,
-                                busy = controlBusy,
-                                onSetNetworkMode = onSetNetworkMode,
-                                modifier = Modifier.fillMaxWidth().weight(.61f)
-                            )
-                            Spacer(Modifier.height(gap))
-                            TargetTower(
-                                snapshot = snapshot,
-                                onOpen = onNavigateTowers,
-                                modifier = Modifier.fillMaxWidth().weight(.39f)
-                            )
-                        }
                     }
-
                     Spacer(Modifier.height(gap))
 
                     Row(
-                        Modifier.fillMaxWidth().weight(.25f),
+                        modifier = Modifier.fillMaxWidth().weight(118f),
                         horizontalArrangement = Arrangement.spacedBy(gap)
                     ) {
-                        TargetBands(snapshot, onNavigateBands, Modifier.weight(1f).fillMaxHeight())
-                        TargetLiveSignal(snapshot, telemetrySamples, Modifier.weight(1f).fillMaxHeight())
+                        TargetTowerCard(snapshot, onNavigateTowers, Modifier.weight(1.25f).fillMaxHeight())
+                        TargetLiveSignalCard(snapshot, telemetrySamples, Modifier.weight(1f).fillMaxHeight())
+                    }
+                    Spacer(Modifier.height(gap))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().weight(92f),
+                        horizontalArrangement = Arrangement.spacedBy(gap)
+                    ) {
+                        TargetActiveBandsCard(snapshot, onNavigateBands, Modifier.weight(1.25f).fillMaxHeight())
+                        TargetQuickToolsCard(
+                            smartBusy = smartBusy,
+                            onOptimize = onOptimizeNow,
+                            onDiagnostics = onNavigateTools,
+                            onBands = onNavigateBands,
+                            onRefresh = onRefreshNow,
+                            modifier = Modifier.weight(1f).fillMaxHeight()
+                        )
+                    }
+
+                    if (operationMessage.isNotBlank()) {
+                        Text(
+                            text = operationMessage,
+                            color = THMuted,
+                            fontSize = 6.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
+                        )
                     }
                 }
 
                 HaiSharedBottomNav(
                     selected = "home",
                     onHome = {},
-                    onStats = onNavigateNetwork,
-                    onMap = onNavigateTowers,
-                    onSettings = onNavigateTools,
-                    onMore = onNavigateBands
+                    onNetwork = onNavigateNetwork,
+                    onTools = onNavigateTools,
+                    onLogs = onNavigateLogs,
+                    onMore = onNavigateMore
                 )
             }
         }
@@ -156,219 +184,689 @@ fun TargetHomeDashboard(
 
 @Composable
 private fun TargetHero(snapshot: RouterSnapshot, modifier: Modifier) {
-    val nr = snapshot.raw["_zte_nr_active_verified"].equals("true", true)
-    val lte = snapshot.raw["_zte_lte_active_verified"].equals("true", true)
-    val network = when { nr -> "5G"; lte -> "4G"; else -> "—" }
-    val rsrp = if (nr) snapshot.nrRsrp else snapshot.lteRsrp
-    val sinr = if (nr) snapshot.nrSinr else snapshot.lteSinr
+    val nrVerified = snapshot.raw["_zte_nr_active_verified"].equals("true", true)
+    val lteVerified = snapshot.raw["_zte_lte_active_verified"].equals("true", true)
+    val network = when { nrVerified -> "5G"; lteVerified -> "4G"; else -> "—" }
+    val mode = when {
+        nrVerified && snapshot.networkType.orEmpty().contains("SA", true) &&
+            !snapshot.networkType.orEmpty().contains("NSA", true) -> "SA"
+        nrVerified -> "NSA"
+        lteVerified -> "LTE"
+        else -> "غير مؤكد"
+    }
+    val rsrp = if (nrVerified) snapshot.nrRsrp else snapshot.lteRsrp
+    val bands = activeBandLabels(snapshot)
+    val aggregation = aggregationSummary(snapshot, bands)
 
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp)
+    ) {
+        Row(Modifier.fillMaxSize()) {
+            TargetRouterIllustration(Modifier.fillMaxHeight().weight(.29f))
+            Column(Modifier.fillMaxHeight().weight(.71f).padding(9.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("حالة الشبكة", color = THNavy, fontSize = 13.5.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.width(4.dp))
+                            TargetSmallBars(THBlue, Modifier.size(15.dp, 16.dp))
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Row(
+                            modifier = Modifier.clip(RoundedCornerShape(15.dp))
+                                .background(if (rsrp != null) THSoftGreen else THSoft)
+                                .padding(horizontal = 9.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                targetQuality(rsrp),
+                                color = if (rsrp != null) Color(0xFF079B64) else THMuted,
+                                fontSize = 8.5.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            TargetSmallBars(if (rsrp != null) THGreen else THMuted, Modifier.size(12.dp, 10.dp))
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            if (nrVerified || lteVerified) "أنت متصل بالإنترنت" else "لم يتم إثبات اتصال الراديو",
+                            color = THMuted,
+                            fontSize = 7.4.sp
+                        )
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = network,
+                            fontSize = 40.sp,
+                            fontWeight = FontWeight.Black,
+                            style = androidx.compose.material3.LocalTextStyle.current.copy(
+                                brush = Brush.linearGradient(listOf(THBlue, THCyan))
+                            )
+                        )
+                        Box(
+                            Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFFE9F2FF))
+                                .padding(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text(mode, color = THBlue, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            if (network == "—") "الشبكة الحالية غير مؤكدة" else "الشبكة الحالية: $network $mode",
+                            color = THNavy,
+                            fontSize = 6.7.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(5.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(52.dp)
+                        .clip(RoundedCornerShape(15.dp)).background(Color(0xFFFAFCFF))
+                        .border(.7.dp, THBorder, RoundedCornerShape(15.dp)).padding(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1.28f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("الترددات المتصلة الآن", color = THNavy, fontSize = 8.2.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.width(3.dp)); Text("⌁", color = THBlue, fontSize = 10.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            if (bands.isEmpty()) {
+                                TargetBandMiniChip("—", "غير مؤكد", Color(0xFFE8F2FF))
+                            } else {
+                                bands.take(3).forEachIndexed { index, band ->
+                                    TargetBandMiniChip(
+                                        band,
+                                        if (band.startsWith("n", true)) "5G" else "LTE",
+                                        listOf(Color(0xFFE5F2FF), Color(0xFFF3EDFF), Color(0xFFE8F8EF))[index % 3]
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Box(Modifier.width(1.dp).height(38.dp).background(THBorder))
+                    Spacer(Modifier.width(5.dp))
+                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("الدمج النشط", color = THNavy, fontSize = 8.2.sp, fontWeight = FontWeight.ExtraBold)
+                            Spacer(Modifier.width(3.dp)); Text("▰", color = THBlue, fontSize = 10.sp)
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(11.dp))
+                                .background(Color(0xFFEAF3FF)).padding(horizontal = 6.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                aggregation.carriers,
+                                color = THNavy,
+                                fontSize = 7.3.sp,
+                                fontWeight = FontWeight.Black,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            aggregation.badge?.let { badge ->
+                                Spacer(Modifier.width(4.dp))
+                                Box(
+                                    Modifier.clip(RoundedCornerShape(8.dp)).background(THBlue)
+                                        .padding(horizontal = 5.dp, vertical = 3.dp)
+                                ) {
+                                    Text(badge, color = Color.White, fontSize = 6.5.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetRouterIllustration(modifier: Modifier) {
+    Box(
+        modifier = modifier.background(Brush.linearGradient(listOf(Color(0xFF43A8FF), Color(0xFFE9F5FF)))),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.fillMaxSize().padding(8.dp)) {
+            val cx = size.width * .50f
+            val cy = size.height * .43f
+            repeat(3) { index ->
+                drawCircle(
+                    color = Color.White.copy(alpha = .18f),
+                    radius = 35f + index * 26f,
+                    center = Offset(cx, cy),
+                    style = Stroke(width = 2f)
+                )
+            }
+            val routerW = size.width * .43f
+            val routerH = size.height * .62f
+            val left = cx - routerW / 2f
+            val top = cy - routerH / 2f
+            drawRoundRect(
+                brush = Brush.linearGradient(listOf(Color.White, Color(0xFFDCE5EE))),
+                topLeft = Offset(left, top),
+                size = Size(routerW, routerH),
+                cornerRadius = CornerRadius(18f)
+            )
+            repeat(4) { index ->
+                drawCircle(
+                    color = if (index < 3) THGreen else Color(0xFFB8C4D4),
+                    radius = 3f,
+                    center = Offset(left + routerW * .80f, top + routerH * (.35f + index * .09f))
+                )
+            }
+        }
+        Text("ZTE", color = Color(0xFF9CA9BB), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TargetBandMiniChip(title: String, subtitle: String, color: Color) {
+    Column(
+        modifier = Modifier.width(35.dp).clip(RoundedCornerShape(9.dp)).background(color).padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(title, color = THNavy, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(subtitle, color = THBlue, fontSize = 6.2.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun TargetSignalMetricsRow(snapshot: RouterSnapshot, modifier: Modifier) {
+    val nr = snapshot.raw["_zte_nr_active_verified"].equals("true", true)
+    val rsrp = if (nr) snapshot.nrRsrp else snapshot.lteRsrp
+    val sinr = if (nr) snapshot.nrSinr else snapshot.lteSinr
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TargetMetricCard("RSRP", rsrp, "dBm", THBlue, Modifier.weight(1f).fillMaxHeight())
+        TargetMetricCard("SINR", sinr, "dB", THGreen, Modifier.weight(1f).fillMaxHeight())
+        TargetMetricCard("RSRQ", snapshot.lteRsrq, "dB", THBlue, Modifier.weight(1f).fillMaxHeight())
+    }
+}
+
+@Composable
+private fun TargetMetricCard(title: String, value: Double?, unit: String, iconColor: Color, modifier: Modifier) {
+    Card(
+        modifier = modifier,
+        shape = THSmallShape,
         colors = CardDefaults.cardColors(containerColor = THCard),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(Modifier.fillMaxSize()) {
-            TargetTowerArt(Modifier.fillMaxHeight().weight(.39f))
-            Column(Modifier.fillMaxHeight().weight(.61f).padding(10.dp)) {
-                Row(Modifier.fillMaxWidth().weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("حالة الشبكة", color = THNavy, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold)
-                        Text(network, color = THNavy, fontSize = 42.sp, fontWeight = FontWeight.Black)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(targetQuality(rsrp), color = if (rsrp != null) Color(0xFF149B7E) else THMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.width(5.dp))
-                            Box(Modifier.size(8.dp).background(if (rsrp != null) THGreen else THMuted, CircleShape))
-                        }
-                    }
-                    TargetBigSignalBars(Modifier.size(62.dp, 62.dp))
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(Modifier.fillMaxWidth().height(62.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    TargetMetric("RSRP", rsrp, "dBm", Modifier.weight(1f))
-                    TargetMetric("SINR", sinr, "dB", Modifier.weight(1f))
-                    TargetMetric("RSRQ", snapshot.lteRsrq, "dB", Modifier.weight(1f))
-                }
+        Row(Modifier.fillMaxSize().padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            TargetSmallBars(iconColor, Modifier.size(12.dp, 16.dp))
+            Spacer(Modifier.width(7.dp))
+            Column {
+                Text(title, color = THMuted, fontSize = 8.5.sp, fontWeight = FontWeight.Bold)
+                Text(value?.let(::tf1) ?: "—", color = THNavy, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                Text(unit, color = THMuted, fontSize = 8.sp)
             }
         }
     }
 }
 
 @Composable
-private fun TargetTowerArt(modifier: Modifier) {
-    Box(modifier.background(Brush.verticalGradient(listOf(Color(0xFFEEF8FF), Color(0xFFDCEEFF), Color(0xFFBFD8FF))))) {
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val hillA = Path().apply {
-                moveTo(0f, h * .72f); quadraticBezierTo(w * .35f, h * .58f, w * .65f, h * .74f); quadraticBezierTo(w * .84f, h * .65f, w, h * .73f); lineTo(w, h); lineTo(0f, h); close()
-            }
-            drawPath(hillA, Color(0xFFB7D4FF))
-            val hillB = Path().apply {
-                moveTo(0f, h * .84f); quadraticBezierTo(w * .42f, h * .73f, w, h * .82f); lineTo(w, h); lineTo(0f, h); close()
-            }
-            drawPath(hillB, Color(0xFF8BB6F4))
-            val cx = w * .50f
-            val top = h * .31f
-            val bottom = h * .84f
-            val halfBase = w * .15f
-            drawLine(THNavy, Offset(cx, top), Offset(cx - halfBase, bottom), 4f)
-            drawLine(THNavy, Offset(cx, top), Offset(cx + halfBase, bottom), 4f)
-            repeat(4) { i ->
-                val t = (i + 1) / 5f
-                val y = top + (bottom - top) * t
-                val half = halfBase * t
-                drawLine(THNavy, Offset(cx - half, y), Offset(cx + half, y), 3f)
-            }
-            drawCircle(THBlue, 7f, Offset(cx, top - 4f))
-            repeat(3) { i ->
-                val r = 20f + i * 15f
-                drawArc(THBlue.copy(alpha = 1f - i * .20f), 205f, 130f, false, Offset(cx-r, top-4f-r), Size(r*2, r*2), style = Stroke(3f, cap = StrokeCap.Round))
-            }
-            drawCircle(Color(0xFF4AAE84), w*.04f, Offset(w*.18f, h*.78f))
-            drawCircle(Color(0xFF2DA27E), w*.05f, Offset(w*.80f, h*.73f))
-        }
-    }
-}
-
-@Composable
-private fun TargetBigSignalBars(modifier: Modifier) {
-    Canvas(modifier) {
-        val gap = size.width * .07f
-        val bw = (size.width - gap * 4f) / 5f
-        listOf(.34f,.50f,.66f,.82f,1f).forEachIndexed { i, f ->
-            val bh = size.height * f
-            drawRoundRect(THBlue.copy(alpha = .62f + i*.09f), Offset(i*(bw+gap), size.height-bh), Size(bw,bh), CornerRadius(bw*.45f))
-        }
-    }
-}
-
-@Composable
-private fun TargetMetric(title: String, value: Double?, unit: String, modifier: Modifier) {
-    Box(modifier.fillMaxHeight().clip(RoundedCornerShape(13.dp)).background(THSoft), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, color = THMuted, fontSize = 8.4.sp, fontWeight = FontWeight.Bold)
-            Text(value?.let(::tf1) ?: "—", color = THNavy, fontSize = 15.sp, fontWeight = FontWeight.Black)
-            Text(unit, color = THMuted, fontSize = 8.sp)
-        }
-    }
-}
-
-@Composable
-private fun TargetSpeed(performance: NetworkPerformance?, busy: Boolean, onSpeedTest: () -> Unit, modifier: Modifier) {
-    Card(modifier, RoundedCornerShape(18.dp), CardDefaults.cardColors(THCard), elevation = CardDefaults.cardElevation(2.dp)) {
-        Column(Modifier.fillMaxSize().padding(11.dp)) {
+private fun TargetSpeedCard(performance: NetworkPerformance?, busy: Boolean, onSpeedTest: () -> Unit, modifier: Modifier) {
+    Card(
+        modifier = modifier,
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(9.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("اختبار السرعة", color = THNavy, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
-                Spacer(Modifier.weight(1f)); Text("◴", color = THBlue, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                Column {
+                    Text(performance?.measuredAtEpochMs?.let(::relativeTestTime) ?: "لم يُجر اختبار بعد", color = THMuted, fontSize = 6.5.sp)
+                    performance?.latencyMs?.let { Text("زمن الاستجابة ${tf0(it)} ms", color = THMuted, fontSize = 6.sp) }
+                }
+                Spacer(Modifier.weight(1f))
+                Text("اختبار السرعة", color = THNavy, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.width(4.dp)); Text("◴", color = THBlue, fontSize = 14.sp)
             }
-            TargetGauge(performance?.downloadMbps, Modifier.fillMaxWidth().weight(1f))
-            Row(Modifier.fillMaxWidth().height(62.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                TargetSpeedMetric("↑", "رفع", "—", Modifier.weight(1f))
-                TargetSpeedMetric("↓", "تنزيل", performance?.downloadMbps?.let(::tf1) ?: "—", Modifier.weight(1f))
+            Spacer(Modifier.height(3.dp))
+            Row(Modifier.weight(1f)) {
+                TargetSpeedGauge(performance?.downloadMbps, Modifier.weight(1f).fillMaxHeight())
+                Column(
+                    modifier = Modifier.width(52.dp).fillMaxHeight(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("↥", color = THPurple, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(performance?.uploadMbps?.let(::tf1) ?: "—", color = THNavy, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                    Text("Mb/s", color = THMuted, fontSize = 7.5.sp)
+                    Text("رفع", color = THMuted, fontSize = 6.2.sp)
+                }
             }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onSpeedTest, enabled = !busy, modifier = Modifier.fillMaxWidth().height(38.dp), shape = RoundedCornerShape(13.dp), colors = ButtonDefaults.buttonColors(containerColor = THBlue)) {
-                Text(if (busy) "جاري الاختبار…" else "بدء الاختبار", color = Color.White, fontSize = 10.5.sp, fontWeight = FontWeight.Bold)
+            Button(
+                onClick = onSpeedTest,
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth().height(29.dp),
+                shape = RoundedCornerShape(13.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = THBlue),
+                contentPadding = PaddingValues(0.dp)
+            ) {
+                Text(if (busy) "جاري الاختبار…" else "▶  بدء الاختبار", color = Color.White, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun TargetGauge(download: Double?, modifier: Modifier) {
-    val fraction = ((download ?: 0.0) / 500.0).coerceIn(0.0,1.0).toFloat()
+private fun TargetSpeedGauge(downloadMbps: Double?, modifier: Modifier) {
+    val fraction = ((downloadMbps ?: 0.0) / 500.0).coerceIn(0.0, 1.0).toFloat()
     Box(modifier, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize().padding(7.dp)) {
-            val aw = size.width*.88f; val ah = size.height*1.25f; val left=(size.width-aw)/2f; val top=size.height*.18f; val sw=max(10f,size.width*.065f)
-            drawArc(Color(0xFFE4EAF2),180f,180f,false,Offset(left,top),Size(aw,ah),style=Stroke(sw,cap=StrokeCap.Round))
-            drawArc(THBlue,180f,180f*fraction,false,Offset(left,top),Size(aw,ah),style=Stroke(sw,cap=StrokeCap.Round))
+        Canvas(Modifier.fillMaxWidth().height(67.dp)) {
+            val stroke = max(10f, size.width * .055f)
+            val arcSize = Size(size.width * .92f, size.height * 1.60f)
+            val topLeft = Offset(size.width * .04f, size.height * .16f)
+            drawArc(Color(0xFFDDE6F1), 180f, 180f, false, topLeft, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            drawArc(
+                brush = Brush.sweepGradient(listOf(THBlue, Color(0xFF2E9AFB), Color(0xFF34D5CC))),
+                startAngle = 180f,
+                sweepAngle = 180f * fraction,
+                useCenter = false,
+                topLeft = topLeft,
+                size = arcSize,
+                style = Stroke(stroke, cap = StrokeCap.Round)
+            )
         }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.offset(y=12.dp)) {
-            Text(download?.let(::tf0) ?: "—", color = THNavy, fontSize = 28.sp, fontWeight = FontWeight.Black)
-            Text("Mb/s", color = THMuted, fontSize = 10.sp)
-        }
-    }
-}
-
-@Composable
-private fun TargetSpeedMetric(icon:String,title:String,value:String,modifier:Modifier) {
-    Box(modifier.fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(THSoft), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically) { Text(icon,color=THBlue,fontSize=14.sp,fontWeight=FontWeight.Bold); Spacer(Modifier.width(4.dp)); Text(title,color=THMuted,fontSize=8.5.sp,fontWeight=FontWeight.Bold) }
-            Text(value,color=THNavy,fontSize=15.sp,fontWeight=FontWeight.Black); Text("Mb/s",color=THMuted,fontSize=8.sp)
-        }
-    }
-}
-
-@Composable
-private fun TargetNetworkMode(snapshot:RouterSnapshot,busy:Boolean,onSetNetworkMode:(String)->Unit,modifier:Modifier) {
-    val current=snapshot.raw["BearerPreference"].orEmpty()
-    Card(modifier,RoundedCornerShape(18.dp),CardDefaults.cardColors(THCard),elevation=CardDefaults.cardElevation(2.dp)) {
-        Column(Modifier.fillMaxSize().padding(11.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){ Text("وضع الشبكة",color=THNavy,fontSize=12.sp,fontWeight=FontWeight.ExtraBold); Spacer(Modifier.weight(1f)); Text("⌁",color=THBlue,fontSize=16.sp,fontWeight=FontWeight.Bold) }
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(7.dp)){ TargetMode("4G فقط",current=="Only_LTE",false,busy,Modifier.weight(1f)){onSetNetworkMode("Only_LTE")}; TargetMode("3G فقط",current=="Only_WCDMA",false,busy,Modifier.weight(1f)){onSetNetworkMode("Only_WCDMA")} }
-            Spacer(Modifier.height(7.dp))
-            Row(Modifier.weight(1f),horizontalArrangement=Arrangement.spacedBy(7.dp)){ TargetMode("5G فقط",current=="Only_5G",false,busy,Modifier.weight(1f)){onSetNetworkMode("Only_5G")}; TargetMode("تلقائي",current=="WL_AND_5G"||current=="LTE_AND_5G",true,busy,Modifier.weight(1f)){onSetNetworkMode("WL_AND_5G")} }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.offset(y = 9.dp)) {
+            Text("↓", color = THBlue, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(downloadMbps?.let(::tf1) ?: "—", color = THNavy, fontSize = 19.sp, fontWeight = FontWeight.Black)
+            Text("Mb/s تنزيل", color = THMuted, fontSize = 7.sp)
         }
     }
 }
 
 @Composable
-private fun TargetMode(title:String,selected:Boolean,automatic:Boolean,busy:Boolean,modifier:Modifier,onClick:()->Unit) {
-    Surface(modifier=modifier.fillMaxHeight().border(if(selected)1.dp else .6.dp,if(selected)THBlue else THBorder,RoundedCornerShape(12.dp)),onClick=onClick,enabled=!busy,shape=RoundedCornerShape(12.dp),color=if(selected)Color(0xFFEAF3FF) else Color(0xFFF3F6FA)) {
-        Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center) {
-            if(automatic){ Box(Modifier.size(19.dp).border(1.4.dp,if(selected)THBlue else THMuted,CircleShape),contentAlignment=Alignment.Center){Text("A",color=if(selected)THBlue else THMuted,fontSize=8.sp,fontWeight=FontWeight.Black)} } else { TargetSmallBars(if(selected)THBlue else THMuted) }
-            Spacer(Modifier.height(4.dp)); Text(title,color=if(selected)THBlue else THNavy,fontSize=9.sp,fontWeight=FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun TargetSmallBars(color:Color){ Canvas(Modifier.size(18.dp,18.dp)){ val gap=size.width*.08f; val bw=(size.width-gap*3)/4; listOf(.32f,.52f,.76f,1f).forEachIndexed{i,f-> val bh=size.height*f; drawRoundRect(color,Offset(i*(bw+gap),size.height-bh),Size(bw,bh),CornerRadius(bw/2)) } } }
-
-@Composable
-private fun TargetTower(snapshot:RouterSnapshot,onOpen:()->Unit,modifier:Modifier) {
-    Card(modifier.clickable(onClick=onOpen),RoundedCornerShape(18.dp),CardDefaults.cardColors(THCard),elevation=CardDefaults.cardElevation(2.dp)) {
-        Column(Modifier.fillMaxSize().padding(10.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){ Text("أقرب برج",color=THNavy,fontSize=11.sp,fontWeight=FontWeight.ExtraBold); Spacer(Modifier.weight(1f)); Text("⌖",color=THBlue,fontSize=16.sp,fontWeight=FontWeight.Black) }
+private fun TargetNetworkModeCard(snapshot: RouterSnapshot, busy: Boolean, onSetNetworkMode: (String) -> Unit, modifier: Modifier) {
+    val current = snapshot.raw["BearerPreference"].orEmpty()
+    Card(
+        modifier = modifier,
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(9.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("وضع الشبكة", color = THNavy, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.weight(1f)); Text("⌁", color = THBlue, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                TargetModeButton("3G فقط", current == "Only_WCDMA", false, busy, Modifier.weight(1f)) { onSetNetworkMode("Only_WCDMA") }
+                TargetModeButton("4G فقط", current == "Only_LTE", false, busy, Modifier.weight(1f)) { onSetNetworkMode("Only_LTE") }
+            }
             Spacer(Modifier.height(5.dp))
-            Row(Modifier.fillMaxWidth().weight(1f),verticalAlignment=Alignment.CenterVertically){
-                TargetMiniMap(Modifier.weight(1.08f).fillMaxHeight(),snapshot.cellId?.toString()?:"—"); Spacer(Modifier.width(8.dp));
-                Column(Modifier.weight(.92f),horizontalAlignment=Alignment.End){ Text("الموقع غير مؤكد",color=THNavy,fontSize=9.sp,fontWeight=FontWeight.Bold); Text("خلية ${snapshot.cellId?:"—"}",color=THMuted,fontSize=7.5.sp,maxLines=1,overflow=TextOverflow.Ellipsis); Text("PCI ${snapshot.pci?:"—"}",color=THMuted,fontSize=7.5.sp) }
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                TargetModeButton("5G فقط", current == "Only_5G", false, busy, Modifier.weight(1f)) { onSetNetworkMode("Only_5G") }
+                TargetModeButton("تلقائي", current == "WL_AND_5G" || current == "LTE_AND_5G", true, busy, Modifier.weight(1f)) { onSetNetworkMode("WL_AND_5G") }
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = when (current) {
+                    "Only_WCDMA" -> "الوضع الحالي: 3G فقط"
+                    "Only_LTE" -> "الوضع الحالي: 4G فقط"
+                    "Only_5G" -> "الوضع الحالي: 5G فقط"
+                    "WL_AND_5G", "LTE_AND_5G" -> "يتم اختيار أفضل شبكة تلقائيًا"
+                    else -> "الوضع الحالي غير مقروء"
+                },
+                color = THMuted,
+                fontSize = 5.8.sp,
+                modifier = Modifier.align(Alignment.CenterHorizontally),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun TargetModeButton(title: String, selected: Boolean, automatic: Boolean, busy: Boolean, modifier: Modifier, onClick: () -> Unit) {
+    Surface(
+        modifier = modifier.fillMaxHeight(),
+        onClick = onClick,
+        enabled = !busy,
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) THBlue else THSoft,
+        border = if (selected) null else androidx.compose.foundation.BorderStroke(.5.dp, THBorder)
+    ) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            if (automatic) {
+                Box(Modifier.size(18.dp).border(1.3.dp, if (selected) Color.White else THMuted, CircleShape), contentAlignment = Alignment.Center) {
+                    Text("A", color = if (selected) Color.White else THMuted, fontSize = 7.5.sp, fontWeight = FontWeight.Black)
+                }
+            } else {
+                TargetSmallBars(if (selected) Color.White else THNavy, Modifier.size(15.dp, 14.dp))
+            }
+            Spacer(Modifier.height(3.dp))
+            Text(title, color = if (selected) Color.White else THNavy, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun TargetTowerCard(snapshot: RouterSnapshot, onOpen: () -> Unit, modifier: Modifier) {
+    Card(
+        modifier = modifier.clickable(onClick = onOpen),
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("⌾", color = THBlue, fontSize = 15.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.weight(1f)); Text("أقرب برج شبكة", color = THNavy, fontSize = 10.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.weight(1f)) {
+                Column(Modifier.width(83.dp), verticalArrangement = Arrangement.spacedBy(3.dp), horizontalAlignment = Alignment.End) {
+                    TargetInfoLine("معرّف الخلية", snapshot.cellId?.toString() ?: "—")
+                    TargetInfoLine("PCI", snapshot.pci?.toString() ?: "—")
+                    TargetInfoLine("EARFCN", snapshot.earfcn?.toString() ?: "—")
+                }
+                Spacer(Modifier.width(6.dp))
+                TargetMiniMap(Modifier.weight(1f).fillMaxHeight(), snapshot.cellId?.toString() ?: "غير مؤكد")
+            }
+            Spacer(Modifier.height(4.dp))
+            Surface(
+                modifier = Modifier.align(Alignment.End).height(21.dp).width(108.dp),
+                onClick = onOpen,
+                shape = RoundedCornerShape(11.dp),
+                color = Color(0xFFEEF5FF)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text("عرض على الخريطة", color = THBlue, fontSize = 7.5.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
 }
 
 @Composable
-private fun TargetMiniMap(modifier:Modifier,label:String){ Box(modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFFF4F7F5))){ Canvas(Modifier.fillMaxSize()){ val road=Color(0xFFE2E6E8); repeat(5){i-> drawLine(road,Offset(0f,size.height*(i+1)/6),Offset(size.width,size.height*(i+1)/6+14f),2.5f)}; repeat(4){i->drawLine(road,Offset(size.width*(i+1)/5,0f),Offset(size.width*(i+1)/5-12f,size.height),2.5f)}; drawCircle(THBlue.copy(alpha=.18f),34f,Offset(size.width*.55f,size.height*.50f)); drawCircle(THBlue,10f,Offset(size.width*.55f,size.height*.50f)) }; Box(Modifier.align(Alignment.BottomCenter).padding(bottom=4.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(horizontal=6.dp,vertical=2.dp)){Text(label,color=THNavy,fontSize=6.5.sp,fontWeight=FontWeight.Bold,maxLines=1)} } }
+private fun TargetInfoLine(title: String, value: String) {
+    Column(horizontalAlignment = Alignment.End, modifier = Modifier.fillMaxWidth()) {
+        Text(title, color = THMuted, fontSize = 6.1.sp)
+        Text(value, color = THNavy, fontSize = 7.2.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
 
 @Composable
-private fun TargetBands(snapshot:RouterSnapshot,onOpen:()->Unit,modifier:Modifier) {
-    val bands=targetBands(snapshot).take(4)
-    val visible=buildList{addAll(bands);repeat((4-bands.size).coerceAtLeast(0)){add("—")}}
-    Card(modifier,RoundedCornerShape(18.dp),CardDefaults.cardColors(THCard),elevation=CardDefaults.cardElevation(2.dp)) {
-        Column(Modifier.fillMaxSize().padding(11.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){ Text("الترددات (Bands)",color=THNavy,fontSize=11.sp,fontWeight=FontWeight.ExtraBold); Spacer(Modifier.weight(1f)); Text("⌁",color=THBlue,fontSize=16.sp,fontWeight=FontWeight.Black) }
-            Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(6.dp)){ visible.forEachIndexed{i,b->TargetBandChip(b,i,Modifier.weight(1f).fillMaxHeight())} }
-            Spacer(Modifier.height(8.dp)); Surface(modifier=Modifier.fillMaxWidth().height(31.dp),onClick=onOpen,shape=RoundedCornerShape(12.dp),color=THSoft){Box(contentAlignment=Alignment.Center){Text("عرض جميع الترددات",color=THMuted,fontSize=8.5.sp,fontWeight=FontWeight.Bold)}}
+private fun TargetMiniMap(modifier: Modifier, label: String) {
+    Box(modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFFF4F7F5))) {
+        Canvas(Modifier.fillMaxSize()) {
+            val road = Color(0xFFE2E6E8)
+            repeat(6) { i -> drawLine(road, Offset(0f, size.height * (i + 1) / 7f), Offset(size.width, size.height * (i + 1) / 7f + 16f), 2.5f) }
+            repeat(5) { i -> drawLine(road, Offset(size.width * (i + 1) / 6f, 0f), Offset(size.width * (i + 1) / 6f - 14f, size.height), 2.5f) }
+            drawCircle(THBlue.copy(alpha = .18f), 34f, Offset(size.width * .55f, size.height * .50f))
+            drawCircle(THBlue, 10f, Offset(size.width * .55f, size.height * .50f))
+        }
+        Text("⌾", color = THBlue, fontSize = 21.sp, fontWeight = FontWeight.Black, modifier = Modifier.align(Alignment.Center).offset(y = (-8).dp))
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 3.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(horizontal = 6.dp, vertical = 2.dp)) {
+            Text(label, color = THNavy, fontSize = 6.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
-private fun TargetBandChip(band:String,index:Int,modifier:Modifier){ val bg=listOf(Color(0xFFEAF4FF),Color(0xFFE9F9F1),Color(0xFFF3ECFF),Color(0xFFFFF3E6))[index%4]; Box(modifier.clip(RoundedCornerShape(12.dp)).background(bg),contentAlignment=Alignment.Center){Column(horizontalAlignment=Alignment.CenterHorizontally){Text(band,color=THNavy,fontSize=11.sp,fontWeight=FontWeight.Black);Text(if(band=="—")"—" else if(band.startsWith("n",true))"5G" else "4G",color=if(band.startsWith("n",true))Color(0xFF159878) else THMuted,fontSize=8.sp)}} }
+private fun TargetLiveSignalCard(snapshot: RouterSnapshot, samples: List<SafeTelemetrySample>, modifier: Modifier) {
+    val nr = snapshot.raw["_zte_nr_active_verified"].equals("true", true)
+    val rsrp = if (nr) snapshot.nrRsrp else snapshot.lteRsrp
+    val values = samples.mapNotNull { if (it.nrVerified) it.nrRsrp else it.lteRsrp }.takeLast(30)
+    val stable = values.takeLast(6).let { it.size >= 3 && (it.maxOrNull()!! - it.minOrNull()!!) <= 8.0 }
+
+    Card(
+        modifier = modifier,
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("مراقبة الإشارة المباشرة", color = THNavy, fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.weight(1f)); Text("⌁", color = THBlue, fontSize = 14.sp)
+            }
+            Spacer(Modifier.height(5.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(rsrp?.let { "${tf0(it)} dBm" } ?: "—", color = THNavy, fontSize = 17.sp, fontWeight = FontWeight.Black)
+                Spacer(Modifier.weight(1f))
+                Row(
+                    Modifier.clip(RoundedCornerShape(12.dp)).background(if (stable) THSoftGreen else THSoft)
+                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(if (stable) "مستقر" else "حي", color = if (stable) Color(0xFF079B64) else THBlue, fontSize = 7.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(4.dp)); Box(Modifier.size(6.dp).background(if (stable) THGreen else THBlue, CircleShape))
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Box(Modifier.fillMaxWidth().weight(1f)) {
+                TargetSignalGraph(values, Modifier.fillMaxSize().padding(end = 17.dp))
+                Column(
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.End
+                ) {
+                    Text("-60", color = THMuted, fontSize = 5.5.sp)
+                    Text("-80", color = THMuted, fontSize = 5.5.sp)
+                    Text("-100", color = THMuted, fontSize = 5.5.sp)
+                    Text("-120", color = THMuted, fontSize = 5.5.sp)
+                }
+            }
+            Text(
+                if (values.isEmpty()) "بانتظار القراءات الحية" else "آخر ${values.size * 2} ثانية تقريبًا",
+                color = THMuted,
+                fontSize = 5.8.sp,
+                modifier = Modifier.align(Alignment.End)
+            )
+        }
+    }
+}
 
 @Composable
-private fun TargetLiveSignal(snapshot:RouterSnapshot,samples:List<SafeTelemetrySample>,modifier:Modifier){ val nr=snapshot.raw["_zte_nr_active_verified"].equals("true",true); val rsrp=if(nr)snapshot.nrRsrp else snapshot.lteRsrp; val values=samples.mapNotNull{if(it.nrVerified)it.nrRsrp else it.lteRsrp}.takeLast(30); val stable=values.takeLast(6).let{it.size>=3&&(it.maxOrNull()!!-it.minOrNull()!!)<=8.0}; Card(modifier,RoundedCornerShape(18.dp),CardDefaults.cardColors(THCard),elevation=CardDefaults.cardElevation(2.dp)){Column(Modifier.fillMaxSize().padding(11.dp)){Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Text("مراقبة الإشارة المباشرة",color=THNavy,fontSize=11.sp,fontWeight=FontWeight.ExtraBold);Spacer(Modifier.weight(1f));TargetSmallBars(THBlue)};Spacer(Modifier.height(6.dp));TargetSignalGraph(values,Modifier.fillMaxWidth().weight(1f));Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically){Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFFE9FAF2)).padding(horizontal=8.dp,vertical=4.dp),verticalAlignment=Alignment.CenterVertically){Text(if(stable)"مستقرة" else "حية",color=Color(0xFF159B70),fontSize=8.sp,fontWeight=FontWeight.Bold);Spacer(Modifier.width(5.dp));Box(Modifier.size(7.dp).background(THGreen,CircleShape))};Spacer(Modifier.weight(1f));Text(rsrp?.let{"${tf0(it)} dBm"}?:"—",color=THMuted,fontSize=8.5.sp,fontWeight=FontWeight.Bold)}}} }
+private fun TargetSignalGraph(values: List<Double>, modifier: Modifier) {
+    Canvas(modifier) {
+        val grid = Color(0xFFE2EDF8)
+        repeat(7) { i -> val x = size.width * i / 6f; drawLine(grid, Offset(x, 0f), Offset(x, size.height), 1f) }
+        repeat(4) { i -> val y = size.height * i / 3f; drawLine(grid, Offset(0f, y), Offset(size.width, y), 1f) }
+        if (values.size < 2) return@Canvas
+        val line = Path()
+        val area = Path()
+        values.forEachIndexed { index, value ->
+            val x = size.width * index / (values.size - 1).coerceAtLeast(1)
+            val y = size.height * ((-60.0 - value) / 60.0).coerceIn(0.0, 1.0).toFloat()
+            if (index == 0) {
+                line.moveTo(x, y); area.moveTo(x, size.height); area.lineTo(x, y)
+            } else {
+                line.lineTo(x, y); area.lineTo(x, y)
+            }
+            if (index == values.lastIndex) { area.lineTo(x, size.height); area.close() }
+        }
+        drawPath(area, Brush.verticalGradient(listOf(THBlue.copy(alpha = .17f), THBlue.copy(alpha = .01f))))
+        drawPath(line, THBlue, style = Stroke(2.5f, cap = StrokeCap.Round))
+    }
+}
 
 @Composable
-private fun TargetSignalGraph(values:List<Double>,modifier:Modifier){ Canvas(modifier){ val grid=Color(0xFFE3EDF7); repeat(7){i->val x=size.width*i/6f;drawLine(grid,Offset(x,0f),Offset(x,size.height),1f)}; if(values.size<2)return@Canvas; val p=Path();values.forEachIndexed{i,v->val x=size.width*i/(values.size-1).coerceAtLeast(1);val y=size.height*((-60.0-v)/60.0).coerceIn(0.0,1.0).toFloat();if(i==0)p.moveTo(x,y)else p.lineTo(x,y)};drawPath(p,THBlue,style=Stroke(3f,cap=StrokeCap.Round))} }
+private fun TargetActiveBandsCard(snapshot: RouterSnapshot, onOpen: () -> Unit, modifier: Modifier) {
+    val bands = activeBandLabels(snapshot).take(6)
+    Card(
+        modifier = modifier,
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(8.dp)) {
+            Row(Modifier.fillMaxWidth().clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+                Text("⌁", color = THBlue, fontSize = 14.sp)
+                Spacer(Modifier.weight(1f)); Text("الترددات النشطة", color = THNavy, fontSize = 9.8.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.width(5.dp)); Text("عرض الكل ‹", color = THBlue, fontSize = 6.8.sp)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (bands.isEmpty()) {
+                    TargetActiveBand("—", "غير مؤكد", Color(0xFFEAF1FF), Modifier.weight(1f))
+                    repeat(5) { Spacer(Modifier.weight(1f)) }
+                } else {
+                    bands.forEachIndexed { index, band ->
+                        TargetActiveBand(
+                            band,
+                            if (band.startsWith("n", true)) "5G" else "LTE",
+                            listOf(Color(0xFFE5F2FF), Color(0xFFE8F9F4), Color(0xFFEAF9F0), Color(0xFFF4EDFF), Color(0xFFFFF3D9), Color(0xFFEAF1FF))[index % 6],
+                            Modifier.weight(1f)
+                        )
+                    }
+                    repeat(6 - bands.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
 
-private fun targetBands(snapshot:RouterSnapshot):List<String>{ val out=LinkedHashSet<String>();snapshot.cells.forEach{c->targetNormalizeBand(c.band,c.role)?.let(out::add)};if(snapshot.raw["_zte_nr_active_verified"].equals("true",true))targetNormalizeBand(snapshot.nrBand,CellRole.NR)?.let(out::add);if(snapshot.raw["_zte_lte_active_verified"].equals("true",true))targetNormalizeBand(snapshot.lteBand,CellRole.PRIMARY)?.let(out::add);return out.toList() }
-private fun targetNormalizeBand(raw:String?,role:CellRole):String?{val n=Regex("\\d+").find(raw.orEmpty())?.value?:return null;return if(role==CellRole.NR||raw.orEmpty().startsWith("n",true))"n$n" else "B$n"}
-private fun targetQuality(rsrp:Double?):String=when{rsrp==null->"غير مؤكد";rsrp>=-80->"إشارة ممتازة";rsrp>=-90->"إشارة جيدة جدًا";rsrp>=-100->"إشارة ممتازة";rsrp>=-110->"إشارة ضعيفة";else->"إشارة ضعيفة جدًا"}
-private fun tf1(v:Double)=String.format(Locale.US,"%.1f",v)
-private fun tf0(v:Double)=String.format(Locale.US,"%.0f",v)
+@Composable
+private fun TargetActiveBand(name: String, tech: String, bg: Color, modifier: Modifier) {
+    Column(
+        modifier = modifier.fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(bg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(name, color = THNavy, fontSize = 8.3.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(tech, color = if (tech == "5G") THBlue else THMuted, fontSize = 6.sp, maxLines = 1)
+    }
+}
+
+@Composable
+private fun TargetQuickToolsCard(
+    smartBusy: Boolean,
+    onOptimize: () -> Unit,
+    onDiagnostics: () -> Unit,
+    onBands: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = THCardShape,
+        colors = CardDefaults.cardColors(containerColor = THCard),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(Modifier.fillMaxSize().padding(7.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Spacer(Modifier.weight(1f)); Text("أدوات سريعة", color = THNavy, fontSize = 9.8.sp, fontWeight = FontWeight.ExtraBold)
+                Spacer(Modifier.width(4.dp)); Text("▦", color = THBlue, fontSize = 12.sp)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TargetQuickTool("🚀", if (smartBusy) "جاري\nالتحسين" else "تحسين\nالأداء", Color(0xFFF6EDFF), Modifier.weight(1f), !smartBusy, onOptimize)
+                TargetQuickTool("⌕", "تشخيص\nالشبكة", Color(0xFFE8FBF5), Modifier.weight(1f), true, onDiagnostics)
+            }
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TargetQuickTool("▣", "قفل\nالترددات", Color(0xFFE8FAF1), Modifier.weight(1f), true, onBands)
+                TargetQuickTool("↻", "تحديث\nالبيانات", Color(0xFFF5EEFF), Modifier.weight(1f), true, onRefresh)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TargetQuickTool(icon: String, text: String, background: Color, modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = modifier.fillMaxHeight().clip(RoundedCornerShape(9.dp)).background(background)
+            .clickable(enabled = enabled, onClick = onClick).padding(3.dp)
+    ) {
+        Text(icon, color = THBlue, fontSize = 11.sp, modifier = Modifier.align(Alignment.CenterStart))
+        Text(
+            text = text,
+            color = if (enabled) THNavy else THMuted,
+            fontSize = 6.2.sp,
+            lineHeight = 6.6.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.End,
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
+    }
+}
+
+@Composable
+private fun TargetSmallBars(color: Color, modifier: Modifier) {
+    Canvas(modifier) {
+        val gap = size.width * .08f
+        val barWidth = (size.width - gap * 3f) / 4f
+        listOf(.32f, .52f, .76f, 1f).forEachIndexed { index, factor ->
+            val h = size.height * factor
+            drawRoundRect(
+                color = color,
+                topLeft = Offset(index * (barWidth + gap), size.height - h),
+                size = Size(barWidth, h),
+                cornerRadius = CornerRadius(barWidth / 2f)
+            )
+        }
+    }
+}
+
+private data class AggregationSummary(val carriers: String, val badge: String?)
+
+private fun aggregationSummary(snapshot: RouterSnapshot, bands: List<String>): AggregationSummary {
+    val nrVerified = snapshot.raw["_zte_nr_active_verified"].equals("true", true)
+    val caVerified = snapshot.raw["_zte_ca_verified"].equals("true", true)
+    val lteCarriers = snapshot.cells.filter { it.role != CellRole.NR }.distinctBy { Triple(it.band, it.pci, it.arfcn) }.size
+    val nrCarriers = snapshot.cells.filter { it.role == CellRole.NR }.distinctBy { Triple(it.band, it.pci, it.arfcn) }.size
+    val carriers = bands.take(4).joinToString(" + ").ifBlank { "غير مؤكد" }
+    val badge = when {
+        snapshot.caActive && caVerified && lteCarriers >= 2 && nrVerified && nrCarriers >= 1 -> "${lteCarriers}CA + NR"
+        snapshot.caActive && caVerified && lteCarriers >= 2 -> "${lteCarriers}CA"
+        nrVerified && lteCarriers >= 1 -> "NSA"
+        else -> null
+    }
+    return AggregationSummary(carriers, badge)
+}
+
+private fun activeBandLabels(snapshot: RouterSnapshot): List<String> {
+    val out = LinkedHashSet<String>()
+    if (snapshot.raw["_zte_nr_active_verified"].equals("true", true)) normalizeBand(snapshot.nrBand, CellRole.NR)?.let(out::add)
+    snapshot.cells.forEach { normalizeBand(it.band, it.role)?.let(out::add) }
+    if (snapshot.raw["_zte_lte_active_verified"].equals("true", true)) normalizeBand(snapshot.lteBand, CellRole.PRIMARY)?.let(out::add)
+    return out.toList()
+}
+
+private fun normalizeBand(raw: String?, role: CellRole): String? {
+    val n = Regex("\\d+").find(raw.orEmpty())?.value ?: return null
+    return if (role == CellRole.NR || raw.orEmpty().startsWith("n", true)) "n$n" else "B$n"
+}
+
+private fun targetQuality(rsrp: Double?): String = when {
+    rsrp == null -> "غير مؤكد"
+    rsrp >= -80 -> "إشارة ممتازة"
+    rsrp >= -90 -> "إشارة جيدة جدًا"
+    rsrp >= -100 -> "إشارة جيدة"
+    rsrp >= -110 -> "إشارة ضعيفة"
+    else -> "إشارة ضعيفة جدًا"
+}
+
+private fun relativeTestTime(epochMs: Long): String {
+    val minutes = ((System.currentTimeMillis() - epochMs).coerceAtLeast(0L) / 60_000L).toInt()
+    return when {
+        minutes <= 0 -> "آخر اختبار: الآن"
+        minutes == 1 -> "آخر اختبار: منذ دقيقة"
+        minutes < 11 -> "آخر اختبار: منذ $minutes دقائق"
+        else -> "آخر اختبار: منذ $minutes دقيقة"
+    }
+}
+
+private fun tf1(v: Double) = String.format(Locale.US, "%.1f", v)
+private fun tf0(v: Double) = String.format(Locale.US, "%.0f", v)
