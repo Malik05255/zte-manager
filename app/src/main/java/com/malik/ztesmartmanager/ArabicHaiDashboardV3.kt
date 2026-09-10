@@ -160,7 +160,7 @@ fun ArabicHaiDashboardV3(
 
             if (snapshot != null && section == M3Section.HOME) {
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-                    ReferenceHomeDashboard(
+                    TargetHomeDashboard(
                     snapshot = snapshot,
                     telemetrySamples = telemetrySamples,
                     status = status,
@@ -183,7 +183,7 @@ fun ArabicHaiDashboardV3(
             }
 
             Column(Modifier.fillMaxSize()) {
-                M3Header(layout, snapshot != null, onDisconnect)
+                M3Header(layout, snapshot != null, onDisconnect) { section = M3Section.TOOLS }
 
                 if (snapshot == null) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -310,22 +310,8 @@ fun ArabicHaiDashboardV3(
 }
 
 @Composable
-private fun M3Header(layout: M3Layout, connected: Boolean, onDisconnect: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = layout.padding.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("ZTE Smart HAI", color = M3Ink, fontSize = m3sp(layout, 21), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-        Row(
-            Modifier.clip(RoundedCornerShape(50)).background(M3Card).border(1.dp, M3Border, RoundedCornerShape(50))
-                .clickable(enabled = connected, onClick = onDisconnect).padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (connected) M3Green else M3Red))
-            Spacer(Modifier.width(6.dp))
-            Text(if (connected) "متصل" else "غير متصل", color = M3Ink, fontSize = m3sp(layout, 12), fontWeight = FontWeight.Bold)
-        }
-    }
+private fun M3Header(layout: M3Layout, connected: Boolean, onDisconnect: () -> Unit, onMenu: () -> Unit) {
+    HaiSharedHeader(connected = connected, onDisconnect = onDisconnect, onMenu = onMenu)
 }
 
 @Composable
@@ -800,15 +786,21 @@ private fun M3Card(layout: M3Layout, content: @Composable () -> Unit) {
 
 @Composable
 private fun M3BottomNav(selected: M3Section, onSelect: (M3Section) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier.fillMaxWidth().navigationBarsPadding().height(78.dp).background(Color.White).padding(horizontal = 6.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        M3Nav("⌂", "الرئيسية", selected == M3Section.HOME, Modifier.weight(1f)) { onSelect(M3Section.HOME) }
-        M3Nav("⌁", "الشبكة", selected == M3Section.NETWORK, Modifier.weight(1f)) { onSelect(M3Section.NETWORK) }
-        M3Nav("⌾", "الأبراج", selected == M3Section.TOWERS, Modifier.weight(1f)) { onSelect(M3Section.TOWERS) }
-        M3Nav("▦", "الترددات", selected == M3Section.BANDS, Modifier.weight(1f)) { onSelect(M3Section.BANDS) }
-        M3Nav("⚒", "الأدوات", selected == M3Section.TOOLS, Modifier.weight(1f)) { onSelect(M3Section.TOOLS) }
+    Box(modifier.fillMaxWidth()) {
+        HaiSharedBottomNav(
+            selected = when (selected) {
+                M3Section.HOME -> "home"
+                M3Section.NETWORK -> "stats"
+                M3Section.TOWERS -> "map"
+                M3Section.TOOLS -> "settings"
+                M3Section.BANDS -> "more"
+            },
+            onHome = { onSelect(M3Section.HOME) },
+            onStats = { onSelect(M3Section.NETWORK) },
+            onMap = { onSelect(M3Section.TOWERS) },
+            onSettings = { onSelect(M3Section.TOOLS) },
+            onMore = { onSelect(M3Section.BANDS) }
+        )
     }
 }
 
