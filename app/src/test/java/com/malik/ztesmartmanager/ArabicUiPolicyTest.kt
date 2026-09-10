@@ -63,6 +63,17 @@ class ArabicUiPolicyTest {
     }
 
     @Test
+    fun uiGuard_allowsSymbolsAndTechnicalTerms_butRejectsEnglishWords() {
+        assertTrue(isArabicOrTechnicalOnly("☰"))
+        assertTrue(isArabicOrTechnicalOnly("⌁"))
+        assertTrue(isArabicOrTechnicalOnly("5G NSA"))
+        assertTrue(isArabicOrTechnicalOnly("RSRP"))
+        assertTrue(isArabicOrTechnicalOnly("ZTE Smart HAI"))
+        assertFalse(isArabicOrTechnicalOnly("Speed Test"))
+        assertFalse(isArabicOrTechnicalOnly("Network Stat"))
+    }
+
+    @Test
     fun manifestAndDefaultName_keepArabicRtlContract() {
         val manifest = File("src/main/AndroidManifest.xml").readText()
         val strings = File("src/main/res/values/strings.xml").readText()
@@ -77,14 +88,17 @@ class ArabicUiPolicyTest {
 
     private fun isArabicOrTechnicalOnly(value: String): Boolean {
         if (value.any { it in '\u0600'..'\u06FF' }) return true
+
         var remaining = value
-        TECHNICAL_TOKENS.forEach { token ->
-            remaining = remaining.replace(token, "", ignoreCase = false)
-        }
-        remaining = remaining
-            .replace(Regex("[0-9\\s._+\\-•:/()٪%…|]+"), "")
-            .replace("—", "")
-        return remaining.isBlank()
+        TECHNICAL_TOKENS
+            .sortedByDescending { it.length }
+            .forEach { token ->
+                remaining = remaining.replace(token, "", ignoreCase = false)
+            }
+
+        // الأرقام والرموز والأيقونات ليست لغة. بعد حذف المصطلحات التقنية المسموح بها،
+        // وجود أي حرف لاتيني يعني أن هناك نص واجهة إنجليزيًا مباشرًا غير معرّب.
+        return remaining.none { it in 'A'..'Z' || it in 'a'..'z' }
     }
 
     companion object {
