@@ -29,11 +29,14 @@ import com.malik.ztesmartmanager.core.smart.PlacementReading
 import com.malik.ztesmartmanager.core.smart.SmartBandOptimizer
 import com.malik.ztesmartmanager.core.smart.SmartOptimizationReport
 import com.malik.ztesmartmanager.core.storage.RouterBackupStore
+import com.malik.ztesmartmanager.core.storage.TowerFingerprintStore
 import com.malik.ztesmartmanager.core.tower.NearbyCell
 import com.malik.ztesmartmanager.core.tower.TowerGuardStatus
 import com.malik.ztesmartmanager.core.tower.TowerLockEngine
 import com.malik.ztesmartmanager.core.tower.TowerMatch
+import com.malik.ztesmartmanager.core.tower.TowerRecommendationEngine
 import com.malik.ztesmartmanager.core.tower.TowerTarget
+import com.malik.ztesmartmanager.core.tower.VerifiedTowerLockCoordinator
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -94,6 +97,7 @@ private fun FinalManagerApp() {
 
     val context = LocalContext.current
     val backupStore = remember(context) { RouterBackupStore(context) }
+    val fingerprintStore = remember(context) { TowerFingerprintStore(context) }
     var latestSafetyBackup by remember { mutableStateOf<RouterSettingsBackup?>(null) }
     val scope = rememberCoroutineScope()
 
@@ -133,8 +137,9 @@ private fun FinalManagerApp() {
                 val newClient = ZteRouterClient(routerAddress)
                 val profile = newClient.login(password)
                 val first = newClient.readSnapshot()
+                val newTowerEngine = TowerLockEngine(newClient)
                 client = newClient
-                towerEngine = TowerLockEngine(newClient)
+                towerEngine = newTowerEngine
                 snapshot = first
                 selectedLte = premiumCurrentLteBands(first)
                 selectedNr = premiumCurrentNrBands(first)
@@ -147,7 +152,16 @@ private fun FinalManagerApp() {
                 placementReading = placementEngine.add(first)
                 smartBaseline = monitorScorer.score(first).total
                 poorSamples = 0
-                status = "متصل • ${profile.capabilities.modelFamily}"
+
+                val savedFingerprint = fingerprintStore.latest(routerAddress, profile.id)
+                val fingerprintMatch = savedFingerprint?.let { newTowerEngine.compare(it.toTarget(), first) }
+                status = when (fingerprintMatch) {
+                    TowerMatch.MATCHED -> "متصل • ${profile.capabilities.modelFamily} • على البصمة المحفوظة"
+                    TowerMatch.RADIO_MATCH_ID_CHANGED -> "متصل • ${profile.capabilities.modelFamily} • PCI/EARFCN يطابقان بصمة محفوظة لكن هوية الخلية تغيّرت"
+                    TowerMatch.DRIFTED -> "متصل • ${profile.capabilities.modelFamily} • توجد بصمة خلية محفوظة غير نشطة الآن"
+                    TowerMatch.UNKNOWN -> "متصل • ${profile.capabilities.modelFamily} • توجد بصمة محفوظة لكن لا يمكن التحقق منها الآن"
+                    null -> "متصل • ${profile.capabilities.modelFamily}"
+                }
             }.onFailure {
                 client = null
                 towerEngine = null
@@ -188,6 +202,77 @@ private fun FinalManagerApp() {
             }
             poorSamples = 0
             smartBusy = false
+        }
+    }
+
+    fun requestVerifiedCellLock(candidate: NearbyCell) {
+        val connected = client ?: return
+        val engine = towerEngine ?: return
+        if (controlBusy || scanBusy || smartBusy) return
+
+        scope.launch {
+            controlBusy = true
+            towerGuardEnabled = false
+
+            val backup = captureSafetyBackup(
+                connected,
+                canRestore = { it.hasCompleteCellLockState },
+                unavailableMessage = "حالة Cell Lock الأصلية غير مكتملة؛ لن نرسل قفلًا دون مسار رجوع"
+            )
+            if (backup == null) {
+                controlBusy = false
+                return@launch
+            }
+
+            // If the router was already unlocked, prove that its unlock path works before risking a lock.
+            val removalVerified = if (backup.cellWasUnlocked) {
+                runCatching { connected.clearCellLock() }.getOrNull()?.verified == true
+            } else true
+            if (!removalVerified) {
+                operationMessage = "تم إيقاف القفل: الـFirmware لم يثبت أن إزالة Cell Lock تعمل على هذا الجهاز"
+                controlBusy = false
+                return@launch
+            }
+
+            operationMessage = "إعادة التحقق من الخلية المختارة قبل أي أمر قفل..."
+            val result = runCatching {
+                VerifiedTowerLockCoordinator(connected, engine, routerAddress).lock(candidate)
+            }.getOrElse {
+                operationMessage = "تعذر فحص/تثبيت الخلية: ${it.message.orEmpty()}"
+                controlBusy = false
+                return@launch
+            }
+
+            if (result.success && result.target != null && result.fingerprint != null) {
+                towerTarget = result.target
+                towerGuardStatus = TowerGuardStatus(
+                    target = result.target,
+                    match = TowerMatch.MATCHED,
+                    consecutiveDriftSamples = 0,
+                    repaired = false,
+                    message = result.message
+                )
+                fingerprintStore.save(result.fingerprint)
+                operationMessage = "${result.message} • يمكنك تشغيل حارس البرج الآن"
+            } else {
+                towerTarget = null
+                towerGuardEnabled = false
+                towerGuardStatus = null
+
+                operationMessage = if (result.writeAttempted) {
+                    val rollback = runCatching { connected.restoreSettings(backup) }.getOrNull()
+                    when {
+                        rollback?.verified == true -> "${result.message} • أُعيدت إعدادات ما قبل المحاولة وتم التحقق منها"
+                        rollback != null -> "${result.message} • محاولة الرجوع: ${rollback.message}"
+                        else -> "${result.message} • تعذر تنفيذ مسار الرجوع؛ راجع الإعدادات قبل محاولة جديدة"
+                    }
+                } else {
+                    result.message
+                }
+            }
+
+            refreshAfterControl(connected)
+            controlBusy = false
         }
     }
 
@@ -366,97 +451,38 @@ private fun FinalManagerApp() {
             val engine = towerEngine
             if (engine != null && !scanBusy && !controlBusy) scope.launch {
                 scanBusy = true
-                operationMessage = "جاري مسح الخلايا التي يعرضها الراوتر..."
-                runCatching { engine.readNearbyCells() }
-                    .onSuccess { cells ->
-                        nearbyCells = cells
-                        operationMessage = if (cells.isEmpty()) {
-                            "الـFirmware لم يعرض خلايا مجاورة موثّقة؛ لم تتم إضافة أي برج افتراضي"
-                        } else {
-                            "تم رصد ${cells.size} خلية حقيقية من بيانات الراوتر"
-                        }
+                operationMessage = "جاري أخذ عدة قراءات فعلية للخلايا..."
+                runCatching { engine.scanNearbyCells() }
+                    .onSuccess { report ->
+                        nearbyCells = report.cells
+                        val recommendation = TowerRecommendationEngine.recommend(
+                            cells = report.cells,
+                            currentPci = snapshot?.pci,
+                            currentArfcn = snapshot?.earfcn
+                        )
+                        operationMessage = "${report.message} • ${recommendation.reason}"
                     }
                     .onFailure { operationMessage = "تعذر مسح الخلايا: ${it.message.orEmpty()}" }
                 scanBusy = false
             }
         },
         onLockCurrentCell = {
-            val engine = towerEngine
             val current = snapshot
-            if (engine != null && current != null && !controlBusy) scope.launch {
-                controlBusy = true
-                val backup = captureSafetyBackup(
-                    connected,
-                    { it.hasCompleteCellLockState },
-                    "حالة Cell Lock الأصلية غير مكتملة؛ لن نثبت الخلية دون مسار استعادة"
+            if (current?.pci != null && current.earfcn != null) {
+                requestVerifiedCellLock(
+                    NearbyCell(
+                        rat = "LTE",
+                        band = current.lteBand,
+                        pci = current.pci,
+                        arfcn = current.earfcn,
+                        rsrp = current.lteRsrp,
+                        rsrq = current.lteRsrq,
+                        sinr = current.lteSinr
+                    )
                 )
-                if (backup != null) {
-                    val removalVerified = if (backup.cellWasUnlocked) connected.clearCellLock().verified else true
-                    if (!removalVerified) {
-                        operationMessage = "تم إيقاف القفل: لم يثبت الجهاز أن إزالة Cell Lock تعمل"
-                    } else {
-                        val result = runCatching { engine.lockCurrent(current) }.getOrElse {
-                            operationMessage = "تعذر تثبيت الخلية: ${it.message.orEmpty()}"
-                            controlBusy = false
-                            return@launch
-                        }
-                        towerGuardStatus = result
-                        if (result.match == TowerMatch.MATCHED) {
-                            towerTarget = result.target
-                            operationMessage = "${result.message} • يمكنك الآن تشغيل حارس البرج"
-                        } else {
-                            towerTarget = null
-                            towerGuardEnabled = false
-                            operationMessage = result.message
-                        }
-                    }
-                    refreshAfterControl(connected)
-                }
-                controlBusy = false
             }
         },
-        onLockNearbyCell = { cell ->
-            val pci = cell.pci
-            val arfcn = cell.arfcn
-            if (pci != null && arfcn != null && cell.rat == "LTE" && !controlBusy) scope.launch {
-                controlBusy = true
-                val backup = captureSafetyBackup(
-                    connected,
-                    { it.hasCompleteCellLockState },
-                    "حالة Cell Lock الأصلية غير مكتملة؛ لن نثبت خلية مجاورة دون مسار استعادة"
-                )
-                if (backup != null) {
-                    val removalVerified = if (backup.cellWasUnlocked) connected.clearCellLock().verified else true
-                    if (!removalVerified) {
-                        operationMessage = "تم إيقاف القفل: لم يثبت الجهاز أن إزالة Cell Lock تعمل"
-                    } else {
-                        val write = connected.setCellLock(pci, arfcn)
-                        if (!write.success || !write.verified) {
-                            operationMessage = write.message
-                        } else {
-                            delay(1_500)
-                            val after = runCatching { connected.readSnapshot() }.getOrNull()
-                            val target = TowerTarget(pci, arfcn, cell.band, null, null)
-                            val match = after?.let { towerEngine?.compare(target, it) } ?: TowerMatch.UNKNOWN
-                            if (match == TowerMatch.MATCHED) {
-                                towerTarget = target
-                                towerGuardStatus = TowerGuardStatus(
-                                    target, match, 0, false,
-                                    "الراوتر أكد القفل والاتصال الحي يطابق PCI/EARFCN المختارين"
-                                )
-                                operationMessage = "تم تثبيت الخلية والتحقق حيًا • الهوية هنا PCI/EARFCN وليست موقعًا جغرافيًا"
-                            } else {
-                                towerTarget = null
-                                towerGuardEnabled = false
-                                operationMessage = "القفل محفوظ لكن الاتصال الحي لم يطابق الخلية المختارة؛ لن ندّعي نجاحًا غير مؤكد"
-                            }
-                        }
-                    }
-                    refreshAfterControl(connected)
-                }
-                controlBusy = false
-            }
-        },
+        onLockNearbyCell = { cell -> requestVerifiedCellLock(cell) },
         onClearCellLock = {
             if (!controlBusy) scope.launch {
                 controlBusy = true
