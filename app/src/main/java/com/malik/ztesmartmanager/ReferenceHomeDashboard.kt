@@ -94,10 +94,9 @@ fun ReferenceHomeDashboard(
         modifier = Modifier.fillMaxSize().background(RefPage).statusBarsPadding().navigationBarsPadding()
     ) {
         val designWidth = 393.dp
-        val designHeight = 699.dp
         val scaleX = maxWidth.value / designWidth.value
-        val scaleY = maxHeight.value / designHeight.value
         val uiScale = scaleX
+        val designHeight = (maxHeight.value / uiScale).dp
 
         Box(
             modifier = Modifier
