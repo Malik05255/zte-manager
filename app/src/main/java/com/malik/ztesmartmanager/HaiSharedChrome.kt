@@ -39,7 +39,7 @@ private val ChromeMuted = Color(0xFF667590)
 private val ChromeSoft = Color(0xFFF0F5FB)
 private val ChromeSoftGreen = Color(0xFFEAFBF4)
 
-/** One header is shared by every production section to avoid a size/inset jump on Honor 200. */
+/** Shared production header; every section uses the same geometry and system insets. */
 @Composable
 fun HaiSharedHeader(
     connected: Boolean,
@@ -48,18 +48,19 @@ fun HaiSharedHeader(
     onSettings: () -> Unit = {},
     onSearch: () -> Unit = {}
 ) {
+    val ui = LocalHaiUiMetrics.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .height(66.dp)
-                .padding(horizontal = 12.dp),
+                .height(ui.headerHeight)
+                .padding(horizontal = ui.pagePadding),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                horizontalArrangement = Arrangement.spacedBy(ui.sectionGap),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ChromeCircle("⚙", onSettings)
@@ -93,7 +94,7 @@ fun HaiSharedHeader(
                 Row(
                     modifier = Modifier
                         .height(32.dp)
-                        .clip(RoundedCornerShape(20.dp))
+                        .clip(RoundedCornerShape(ui.cardRadius))
                         .background(if (connected) ChromeSoftGreen else Color(0xFFFFEEEE))
                         .clickable(enabled = connected, onClick = onDisconnect)
                         .padding(horizontal = 10.dp),
@@ -114,14 +115,20 @@ fun HaiSharedHeader(
                         maxLines = 1
                     )
                 }
-                Spacer(Modifier.width(7.dp))
-                Text(
-                    text = "☰",
-                    color = ChromeNavy,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Black,
-                    modifier = Modifier.clickable(onClick = onMenu).padding(2.dp)
-                )
+                Spacer(Modifier.width(ui.sectionGap))
+                Box(
+                    modifier = Modifier
+                        .size(ui.chromeButtonSize)
+                        .clickable(onClick = onMenu),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "☰",
+                        color = ChromeNavy,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
             }
         }
     }
@@ -129,9 +136,10 @@ fun HaiSharedHeader(
 
 @Composable
 private fun ChromeCircle(label: String, onClick: () -> Unit) {
+    val ui = LocalHaiUiMetrics.current
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(ui.chromeButtonSize)
             .clip(CircleShape)
             .background(ChromeSoft)
             .clickable(onClick = onClick),
@@ -141,7 +149,7 @@ private fun ChromeCircle(label: String, onClick: () -> Unit) {
     }
 }
 
-/** Reference navigation: المزيد، السجلات، الأدوات، الشبكة، الرئيسية. */
+/** Shared reference navigation: المزيد، السجلات، الأدوات، الشبكة، الرئيسية. */
 @Composable
 fun HaiSharedBottomNav(
     selected: String,
@@ -151,12 +159,16 @@ fun HaiSharedBottomNav(
     onLogs: () -> Unit,
     onMore: () -> Unit
 ) {
+    val ui = LocalHaiUiMetrics.current
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
         Surface(
-            modifier = Modifier.fillMaxWidth().navigationBarsPadding().height(70.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .height(ui.bottomNavHeight),
             color = Color.White,
             shadowElevation = 8.dp,
-            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp)
+            shape = RoundedCornerShape(topStart = ui.cardRadius, topEnd = ui.cardRadius)
         ) {
             Row(
                 modifier = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 6.dp),
