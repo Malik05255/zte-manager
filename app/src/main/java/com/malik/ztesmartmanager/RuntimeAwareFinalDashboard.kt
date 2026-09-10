@@ -32,11 +32,10 @@ import com.malik.ztesmartmanager.core.tower.TowerGuardStatus
 import com.malik.ztesmartmanager.core.tower.TowerTarget
 
 /**
- * Runtime-safety shell for the HAI reference UI.
+ * غلاف الأمان التشغيلي للواجهة العربية.
  *
- * The visual design is now handled by [HaiAdaptiveDashboard]. This shell deliberately keeps the
- * truth-first capability gate between every UI action and router mutation. A beautiful UI must not
- * weaken read-back, rollback, or runtime capability checks.
+ * يبقى فحص قدرات الـFirmware بين الواجهة وأي أمر كتابة للراوتر، بحيث لا تؤثر
+ * الترجمة أو تغييرات التصميم على قواعد read-back أو rollback أو Truth-First.
  */
 @Composable
 fun RuntimeAwareFinalDashboard(
@@ -110,14 +109,14 @@ fun RuntimeAwareFinalDashboard(
 
     fun copySupportBundle() {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboard.setPrimaryClip(ClipData.newPlainText("ZTE Manager diagnostics", supportBundle))
+        clipboard.setPrimaryClip(ClipData.newPlainText("تقرير تشخيص ZTE Smart HAI", supportBundle))
         Toast.makeText(context, "تم نسخ تقرير التشخيص الآمن", Toast.LENGTH_SHORT).show()
     }
 
     fun shareSupportBundle() {
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
-            putExtra(Intent.EXTRA_SUBJECT, "ZTE Manager ${BuildConfig.VERSION_NAME} diagnostics")
+            putExtra(Intent.EXTRA_SUBJECT, "تقرير تشخيص ZTE Smart HAI ${BuildConfig.VERSION_NAME}")
             putExtra(Intent.EXTRA_TEXT, supportBundle)
         }
         context.startActivity(Intent.createChooser(intent, "مشاركة تقرير التشخيص"))
@@ -125,7 +124,7 @@ fun RuntimeAwareFinalDashboard(
 
     fun blocked(action: RuntimeAction): Boolean {
         val report = runtime ?: run {
-            Toast.makeText(context, "لم يكتمل فحص Firmware بعد؛ لم يتم إرسال أي أمر", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "لم يكتمل فحص الـFirmware بعد؛ لم يتم إرسال أي أمر", Toast.LENGTH_SHORT).show()
             return true
         }
         val decision = RuntimeCapabilityAccess.decide(report, action)
@@ -140,7 +139,7 @@ fun RuntimeAwareFinalDashboard(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
 
-    HaiAdaptiveDashboard(
+    ArabicHaiDashboard(
         snapshot = snapshot,
         capabilities = effectiveCapabilities,
         runtime = runtime,
