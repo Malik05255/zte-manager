@@ -7,15 +7,13 @@ import org.junit.Test
 
 /**
  * سياسة واجهة المشروع: العربية هي لغة الإنتاج الافتراضية، والاتجاه RTL إلزامي.
- *
- * الملفات القديمة غير المستخدمة في مسار الإنتاج مستثناة مؤقتًا. أي ملف واجهة جديد
- * سيخضع للفحص تلقائيًا، لذلك إضافة نص إنجليزي مباشر للمستخدم تكسر CI حتى يتم تعريبه.
+ * أي واجهة إنتاج جديدة تخضع للفحص تلقائيًا قبل الدمج.
  */
 class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ArabicHaiDashboard.kt").readText()
+        val dashboard = source("ArabicHaiDashboardV2.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -28,12 +26,12 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم الواجهة العربية",
-            runtime.contains("ArabicHaiDashboard(")
+            "غلاف الأمان يجب أن يستخدم واجهة الجوال العربية V2",
+            runtime.contains("ArabicHaiDashboardV2(")
         )
         assertFalse(
-            "لا يجوز إعادة الواجهة الإنجليزية القديمة إلى مسار الإنتاج",
-            runtime.contains("HaiAdaptiveDashboard(")
+            "لا يجوز إعادة واجهة HAI القديمة إلى مسار الإنتاج",
+            runtime.contains("ArabicHaiDashboard(") || runtime.contains("HaiAdaptiveDashboard(")
         )
     }
 
@@ -92,19 +90,12 @@ class ArabicUiPolicyTest {
         var remaining = value
         TECHNICAL_TOKENS
             .sortedByDescending { it.length }
-            .forEach { token ->
-                remaining = remaining.replace(token, "", ignoreCase = false)
-            }
+            .forEach { token -> remaining = remaining.replace(token, "", ignoreCase = false) }
 
-        // الأرقام والرموز والأيقونات ليست لغة. بعد حذف المصطلحات التقنية المسموح بها،
-        // وجود أي حرف لاتيني يعني أن هناك نص واجهة إنجليزيًا مباشرًا غير معرّب.
         return remaining.none { it in 'A'..'Z' || it in 'a'..'z' }
     }
 
     companion object {
-        // افحص الجزء النصي الثابت فقط حتى بداية أي Kotlin interpolation ($... أو ${...}).
-        // هذا يمنع تفسير أسماء المتغيرات داخل interpolation على أنها نص إنجليزي ظاهر للمستخدم،
-        // مع استمرار كشف أي prefix إنجليزي ثابت مثل Text("Speed $value").
         private val USER_FACING_PATTERNS = listOf(
             Regex("Text\\(\\s*\"([^\"$]+)"),
             Regex("Toast\\.makeText\\([^,]+,\\s*\"([^\"$]+)"),
@@ -118,6 +109,7 @@ class ArabicUiPolicyTest {
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
+            "ArabicHaiDashboard.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
