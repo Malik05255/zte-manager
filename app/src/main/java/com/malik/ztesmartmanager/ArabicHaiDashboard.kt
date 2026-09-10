@@ -182,7 +182,11 @@ fun ArabicHaiDashboard(
                             }
                         }
                     }
-                    ArabicBottomNav(spec, section) { section = it }
+                    ArabicBottomNav(
+                        spec = spec,
+                        selected = section,
+                        onSelect = { section = it }
+                    )
                     return@Column
                 }
 
@@ -250,7 +254,12 @@ fun ArabicHaiDashboard(
                             }
                         }
                     }
-                    ArabicBottomNav(spec, section, { section = it }, Modifier.align(Alignment.BottomCenter))
+                    ArabicBottomNav(
+                        spec = spec,
+                        selected = section,
+                        onSelect = { section = it },
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    )
                 }
             }
         }
