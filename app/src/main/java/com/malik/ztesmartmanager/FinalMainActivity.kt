@@ -479,36 +479,70 @@ private fun FinalManagerApp() {
         },
         onSmartGoalChange = { smartGoal = it },
         onOptimizeNow = { runSmartOptimization(true) },
-        onLteToggle = { band -> selectedLte = premiumToggleBand(selectedLte, band) },
-        onNrToggle = { band -> selectedNr = premiumToggleBand(selectedNr, band) },
+        onLteToggle = { band ->
+            if (band in capabilities.supportedLteBands) {
+                selectedLte = premiumToggleBand(selectedLte, band)
+            } else {
+                operationMessage = "تم تجاهل B$band: التردد غير مدعوم لهذا الـProfile"
+            }
+        },
+        onNrToggle = { band ->
+            if (band in capabilities.supportedNrBands) {
+                selectedNr = premiumToggleBand(selectedNr, band)
+            } else {
+                operationMessage = "تم تجاهل N$band: التردد غير مدعوم لهذا الـProfile"
+            }
+        },
         onApplyLte = {
             if (selectedLte.isNotEmpty() && !controlBusy) scope.launch {
+                val requested = selectedLte.toSet()
                 controlBusy = true
-                val backup = captureSafetyBackup(
-                    connected,
-                    { it.canRestoreLteBands },
-                    "لا يوجد LTE mask أصلي موثوق يمكن استعادته؛ لم يتم تغيير الترددات"
-                )
-                if (backup != null) {
-                    operationMessage = connected.setLteBands(selectedLte).message
-                    refreshAfterControl(connected)
+                try {
+                    val backup = captureSafetyBackup(
+                        connected,
+                        { it.canRestoreLteBands },
+                        "لا يوجد LTE mask أصلي موثوق يمكن استعادته؛ لم يتم تغيير الترددات"
+                    )
+                    if (backup != null) {
+                        val result = runCatching { connected.setLteBands(requested) }
+                            .getOrElse {
+                                operationMessage = "تعذر تطبيق ترددات 4G: ${it.message.orEmpty()}"
+                                return@launch
+                            }
+                        operationMessage = result.message
+                        refreshAfterControl(connected)
+                    }
+                } catch (error: Exception) {
+                    operationMessage = "تعذر تطبيق ترددات 4G: ${error.message.orEmpty()}"
+                } finally {
+                    controlBusy = false
                 }
-                controlBusy = false
             }
         },
         onApplyNr = {
             if (selectedNr.isNotEmpty() && !controlBusy) scope.launch {
+                val requested = selectedNr.toSet()
                 controlBusy = true
-                val backup = captureSafetyBackup(
-                    connected,
-                    { it.canRestoreNrBands },
-                    "قناع 5G الأصلي غير متاح بشكل يسمح باستعادته دون تخمين"
-                )
-                if (backup != null) {
-                    operationMessage = connected.setNrBands(selectedNr).message
-                    refreshAfterControl(connected)
+                try {
+                    val backup = captureSafetyBackup(
+                        connected,
+                        { it.canRestoreNrBands },
+                        "قناع 5G الأصلي غير متاح بشكل يسمح باستعادته دون تخمين"
+                    )
+                    if (backup != null) {
+                        val result = runCatching { connected.setNrBands(requested) }
+                            .getOrElse {
+                                operationMessage = "تعذر تطبيق ترددات 5G: ${it.message.orEmpty()}"
+                                return@launch
+                            }
+                        operationMessage = result.message
+                        refreshAfterControl(connected)
+                    }
+                } catch (error: Exception) {
+                    operationMessage = "تعذر تطبيق ترددات 5G: ${error.message.orEmpty()}"
+                } finally {
+                    controlBusy = false
                 }
-                controlBusy = false
             }
         },
         onSetNetworkMode = { mode ->
