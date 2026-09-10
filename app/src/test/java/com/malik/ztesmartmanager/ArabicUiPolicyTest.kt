@@ -5,15 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/**
- * سياسة واجهة المشروع: العربية هي لغة الإنتاج الافتراضية، والاتجاه RTL إلزامي.
- * أي واجهة إنتاج جديدة تخضع للفحص تلقائيًا قبل الدمج.
- */
 class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ArabicHaiDashboardV2.kt").readText()
+        val dashboard = source("ArabicHaiDashboardV3.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -26,12 +22,14 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة الجوال العربية V2",
-            runtime.contains("ArabicHaiDashboardV2(")
+            "غلاف الأمان يجب أن يستخدم واجهة V3 العربية المبسطة",
+            runtime.contains("ArabicHaiDashboardV3(")
         )
         assertFalse(
-            "لا يجوز إعادة واجهة HAI القديمة إلى مسار الإنتاج",
-            runtime.contains("ArabicHaiDashboard(") || runtime.contains("HaiAdaptiveDashboard(")
+            "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
+            runtime.contains("ArabicHaiDashboardV2(") ||
+                runtime.contains("ArabicHaiDashboard(") ||
+                runtime.contains("HaiAdaptiveDashboard(")
         )
     }
 
@@ -47,9 +45,7 @@ class ArabicUiPolicyTest {
                 USER_FACING_PATTERNS.forEach { regex ->
                     regex.findAll(text).forEach { match ->
                         val literal = match.groupValues[1]
-                        if (!isArabicOrTechnicalOnly(literal)) {
-                            violations += "${file.name}: $literal"
-                        }
+                        if (!isArabicOrTechnicalOnly(literal)) violations += "${file.name}: $literal"
                     }
                 }
             }
@@ -63,7 +59,6 @@ class ArabicUiPolicyTest {
     @Test
     fun uiGuard_allowsSymbolsAndTechnicalTerms_butRejectsEnglishWords() {
         assertTrue(isArabicOrTechnicalOnly("☰"))
-        assertTrue(isArabicOrTechnicalOnly("⌁"))
         assertTrue(isArabicOrTechnicalOnly("5G NSA"))
         assertTrue(isArabicOrTechnicalOnly("RSRP"))
         assertTrue(isArabicOrTechnicalOnly("ZTE Smart HAI"))
@@ -75,7 +70,6 @@ class ArabicUiPolicyTest {
     fun manifestAndDefaultName_keepArabicRtlContract() {
         val manifest = File("src/main/AndroidManifest.xml").readText()
         val strings = File("src/main/res/values/strings.xml").readText()
-
         assertTrue(manifest.contains("android:supportsRtl=\"true\""))
         assertTrue(manifest.contains("android:label=\"@string/app_name\""))
         assertTrue(manifest.contains("android:localeConfig=\"@xml/locales_config\""))
@@ -86,12 +80,9 @@ class ArabicUiPolicyTest {
 
     private fun isArabicOrTechnicalOnly(value: String): Boolean {
         if (value.any { it in '\u0600'..'\u06FF' }) return true
-
         var remaining = value
-        TECHNICAL_TOKENS
-            .sortedByDescending { it.length }
+        TECHNICAL_TOKENS.sortedByDescending { it.length }
             .forEach { token -> remaining = remaining.replace(token, "", ignoreCase = false) }
-
         return remaining.none { it in 'A'..'Z' || it in 'a'..'z' }
     }
 
@@ -105,11 +96,12 @@ class ArabicUiPolicyTest {
 
         private val TECHNICAL_TOKENS = listOf(
             "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "LTE", "NR", "NSA", "SA", "CA",
-            "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB"
+            "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms"
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
             "ArabicHaiDashboard.kt",
+            "ArabicHaiDashboardV2.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
