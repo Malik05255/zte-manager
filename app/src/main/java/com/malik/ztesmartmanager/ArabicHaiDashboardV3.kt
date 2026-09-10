@@ -85,7 +85,9 @@ private data class M3Layout(
     val padding: Int,
     val gap: Int,
     val scale: Float,
-    val bandColumns: Int
+    val bandColumns: Int,
+    val cardRadius: Int,
+    val bottomBarHeight: Int
 )
 
 @Composable
@@ -145,11 +147,13 @@ fun ArabicHaiDashboardV3(
             val height = maxHeight.value.roundToInt().coerceAtLeast(1)
             val spec = remember(width, height) { HaiResponsivePolicy.resolve(width, height) }
             val layout = M3Layout(
-                compact = width < 380,
-                padding = if (width < 360) 12 else if (width < 430) 16 else 20,
-                gap = if (height < 760) 10 else 13,
-                scale = spec.textScale.coerceIn(1.0f, 1.10f),
-                bandColumns = if (width < 350) 3 else 4
+                compact = width < 370,
+                padding = spec.horizontalPaddingDp,
+                gap = spec.sectionGapDp,
+                scale = spec.textScale,
+                bandColumns = if (width < 350) 3 else 4,
+                cardRadius = spec.cardRadiusDp,
+                bottomBarHeight = spec.bottomBarHeightDp
             )
 
             if (snapshot != null && section == M3Section.HOME) {
@@ -207,7 +211,7 @@ fun ArabicHaiDashboardV3(
                             start = layout.padding.dp,
                             end = layout.padding.dp,
                             top = 4.dp,
-                            bottom = 82.dp
+                            bottom = (layout.bottomBarHeight + layout.gap).dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(layout.gap.dp)
                     ) {
@@ -759,7 +763,7 @@ private fun M3Pill(text: String, color: Color) {
 
 @Composable
 private fun M3Message(layout: M3Layout, text: String) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(M3SoftBlue).padding(horizontal = 14.dp, vertical = 10.dp)) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(layout.cardRadius.dp)).background(M3SoftBlue).padding(horizontal = 14.dp, vertical = 10.dp)) {
         Text(text, color = M3Ink, fontSize = m3sp(layout, 12), maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -768,7 +772,7 @@ private fun M3Message(layout: M3Layout, text: String) {
 private fun M3Card(layout: M3Layout, content: @Composable () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(if (layout.compact) 20.dp else 22.dp),
+        shape = RoundedCornerShape(layout.cardRadius.dp),
         colors = CardDefaults.cardColors(containerColor = M3CardColor),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, M3Border)
