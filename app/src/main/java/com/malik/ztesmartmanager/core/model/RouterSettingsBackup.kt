@@ -16,6 +16,7 @@ data class RouterSettingsBackup(
     val firmware: String? = null,
     val hardwareVersion: String? = null,
     val lteBandLock: String? = null,
+    val nrBandLock: String? = null,
     val nrSaBandLock: String? = null,
     val nrNsaBandLock: String? = null,
     val ltePciLock: String? = null,
@@ -25,6 +26,7 @@ data class RouterSettingsBackup(
     val hasAnyRestorableRadioSetting: Boolean
         get() = listOf(
             lteBandLock,
+            nrBandLock,
             nrSaBandLock,
             nrNsaBandLock,
             ltePciLock,
