@@ -3,10 +3,14 @@ package com.malik.ztesmartmanager.core.protocol
 import com.malik.ztesmartmanager.core.model.CarrierCell
 import com.malik.ztesmartmanager.core.model.CellRole
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
+import com.malik.ztesmartmanager.core.profile.RadioIdEncoding
 import org.json.JSONObject
 
 object ZteSnapshotParser {
-    fun parse(json: JSONObject): RouterSnapshot {
+    fun parse(
+        json: JSONObject,
+        radioIdEncoding: RadioIdEncoding = RadioIdEncoding.SAFE_AUTO
+    ): RouterSnapshot {
         val raw = mutableMapOf<String, String>()
         json.keys().forEach { key -> raw[key] = json.optString(key, "") }
 
@@ -14,7 +18,7 @@ object ZteSnapshotParser {
         val radioState = classifyRadioState(rawNetworkType)
 
         val lteBand = normalizeLteBand(firstNonBlank(raw, "lte_ca_pcell_band", "wan_active_band", "lte_band"))
-        val ltePci = parseZtePci(raw["lte_pci"], 503)
+        val ltePci = ZteRadioIdParser.parseInt(raw["lte_pci"], 503, radioIdEncoding)
         val lteArfcn = parsePositiveInt(firstNonBlank(raw, "lte_ca_pcell_arfcn", "lte_ca_pcell_freq", "wan_active_channel"))
         val lteRsrp = firstSignal(raw, -160.0, -35.0, "lte_rsrp")
         val lteRsrq = firstSignal(raw, -40.0, 0.0, "lte_rsrq")
@@ -37,7 +41,12 @@ object ZteSnapshotParser {
         } else null
 
         val parsedSecondaryCells = buildList {
-            addAll(parseSecondaryCells(firstNonBlank(raw, "lte_multi_ca_scell_info", "lte_ca_scell_info")))
+            addAll(
+                parseSecondaryCells(
+                    firstNonBlank(raw, "lte_multi_ca_scell_info", "lte_ca_scell_info"),
+                    radioIdEncoding
+                )
+            )
             if (isEmpty()) {
                 val singleBand = normalizeLteBand(raw["lte_ca_scell_band"])
                 if (singleBand != null) {
@@ -45,7 +54,7 @@ object ZteSnapshotParser {
                         CarrierCell(
                             role = CellRole.SECONDARY,
                             band = singleBand,
-                            pci = parseZtePci(raw["lte_ca_scell_pci"], 503),
+                            pci = ZteRadioIdParser.parseInt(raw["lte_ca_scell_pci"], 503, radioIdEncoding),
                             arfcn = parsePositiveInt(firstNonBlank(raw, "lte_ca_scell_arfcn", "lte_ca_scell_freq")),
                             bandwidthMhz = parseNumber(raw["lte_ca_scell_bandwidth"])
                         )
@@ -84,8 +93,15 @@ object ZteSnapshotParser {
             else -> nsaBand ?: saBand
         }
         val rawNrArfcn = parsePositiveInt(firstNonBlank(raw, "nr_ca_pcell_freq", "nr5g_action_channel", "Z5g_dlEarfcn"))
-        val rawNrPci = parseZtePci(firstNonBlank(raw, "nr5g_pci", "Z_PCI"), 1007)
-        val rawNrCellId = parseZteHexLong(firstNonBlank(raw, "nr5g_cell_id", "Z5g_CELL_ID"))?.takeIf { it > 0 }
+        val rawNrPci = ZteRadioIdParser.parseInt(
+            firstNonBlank(raw, "nr5g_pci", "Z_PCI"),
+            1007,
+            radioIdEncoding
+        )
+        val rawNrCellId = ZteRadioIdParser.parseLong(
+            firstNonBlank(raw, "nr5g_cell_id", "Z5g_CELL_ID"),
+            encoding = radioIdEncoding
+        )?.takeIf { it > 0 }
         val rawNrRsrp = firstSignal(raw, -170.0, -35.0, "Z5g_rsrp", "nr5g_rsrp", "5g_rx0_rsrp", "5g_rx1_rsrp")
         val rawNrSinr = firstNrSinr(raw, "Z5g_SINR", "Z5g_snr", "nr5g_sinr", "nr5g_snr")
 
@@ -118,7 +134,7 @@ object ZteSnapshotParser {
                         bandwidthMhz = parseNumber(raw["nr_ca_pcell_bandwidth"])
                     )
                 )
-                addAll(parseNrSecondaryCells(raw["nr_multi_ca_scell_info"]))
+                addAll(parseNrSecondaryCells(raw["nr_multi_ca_scell_info"], radioIdEncoding))
             }
         }.distinctBy { Triple(it.band, it.pci, it.arfcn) }
 
@@ -143,6 +159,9 @@ object ZteSnapshotParser {
         raw["_zte_interpreted_network_type"] = verifiedNetworkType
         raw["_zte_verified_network_type"] = verifiedNetworkType
         raw["_zte_radio_mode"] = radioMode
+        raw["_zte_radio_id_encoding"] = radioIdEncoding.name
+        raw["_zte_lte_pci_decoded"] = ltePci?.toString().orEmpty()
+        raw["_zte_nr_pci_decoded"] = rawNrPci?.toString().orEmpty()
         raw["_zte_lte_active_verified"] = lteVerifiedActive.toString()
         raw["_zte_nr_active"] = nrActive.toString()
         raw["_zte_nr_active_verified"] = nrVerifiedActive.toString()
@@ -162,6 +181,8 @@ object ZteSnapshotParser {
 
         val mcc = firstNonBlank(raw, "rmcc", "mdm_mcc").orEmpty().trim()
         val mnc = firstNonBlank(raw, "rmnc", "mdm_mnc").orEmpty().trim()
+        val lteCellId = ZteRadioIdParser.parseLong(raw["cell_id"], encoding = radioIdEncoding)
+            ?.takeIf { it > 0 && lteVerifiedActive }
 
         return RouterSnapshot(
             model = firstNonBlank(raw, "device_name", "model_name", "product_name"),
@@ -179,7 +200,7 @@ object ZteSnapshotParser {
             nrBand = nrBand,
             pci = ltePci.takeIf { lteVerifiedActive },
             earfcn = lteArfcn.takeIf { lteVerifiedActive },
-            cellId = parseZteHexLong(raw["cell_id"]).takeIf { lteVerifiedActive },
+            cellId = lteCellId,
             caActive = caVerified && caActive,
             cells = buildList {
                 if (lteVerifiedActive) primaryCell?.let(::add)
@@ -217,7 +238,10 @@ object ZteSnapshotParser {
         }
     }
 
-    private fun parseSecondaryCells(value: String?): List<CarrierCell> {
+    private fun parseSecondaryCells(
+        value: String?,
+        radioIdEncoding: RadioIdEncoding
+    ): List<CarrierCell> {
         if (value.isNullOrBlank()) return emptyList()
 
         return value.trimEnd(';')
@@ -230,14 +254,17 @@ object ZteSnapshotParser {
                 CarrierCell(
                     role = CellRole.SECONDARY,
                     band = band,
-                    pci = parseZtePci(fields.getOrNull(1), 503),
+                    pci = ZteRadioIdParser.parseInt(fields.getOrNull(1), 503, radioIdEncoding),
                     arfcn = parsePositiveInt(fields.getOrNull(4)),
                     bandwidthMhz = parseNumber(fields.getOrNull(5))
                 )
             }
     }
 
-    private fun parseNrSecondaryCells(value: String?): List<CarrierCell> {
+    private fun parseNrSecondaryCells(
+        value: String?,
+        radioIdEncoding: RadioIdEncoding
+    ): List<CarrierCell> {
         if (value.isNullOrBlank()) return emptyList()
 
         return value.trimEnd(';')
@@ -250,7 +277,7 @@ object ZteSnapshotParser {
                 CarrierCell(
                     role = CellRole.NR,
                     band = band,
-                    pci = parseZtePci(fields.getOrNull(1), 1007),
+                    pci = ZteRadioIdParser.parseInt(fields.getOrNull(1), 1007, radioIdEncoding),
                     arfcn = parsePositiveInt(fields.getOrNull(4)),
                     bandwidthMhz = parseNumber(fields.getOrNull(5))
                 )
@@ -362,20 +389,4 @@ object ZteSnapshotParser {
     }
 
     private fun parsePositiveInt(value: String?): Int? = parseSmartInt(value)?.takeIf { it > 0 }
-
-    private fun parseZtePci(value: String?, max: Int): Int? {
-        // MC801A-family goform exposes LTE/NR PCI as hexadecimal strings. Try hex first even
-        // when the token contains digits only (e.g. "64" means 0x64 = 100 on these fields).
-        val text = cleanValue(value)?.removePrefix("0x")?.removePrefix("0X") ?: return null
-        val hex = text.toIntOrNull(16)
-        if (hex != null && hex in 0..max) return hex
-
-        val decimal = text.toIntOrNull(10)
-        return decimal?.takeIf { it in 0..max }
-    }
-
-    private fun parseZteHexLong(value: String?): Long? {
-        val text = cleanValue(value)?.removePrefix("0x")?.removePrefix("0X") ?: return null
-        return text.toLongOrNull(16) ?: text.toLongOrNull(10)
-    }
 }

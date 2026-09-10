@@ -1,6 +1,7 @@
 package com.malik.ztesmartmanager.core.tower
 
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
+import com.malik.ztesmartmanager.core.protocol.ZteRadioIdParser
 import com.malik.ztesmartmanager.core.protocol.ZteRouterClient
 import kotlinx.coroutines.delay
 import org.json.JSONArray
@@ -60,18 +61,13 @@ class TowerLockEngine(
     fun captureCurrent(snapshot: RouterSnapshot): TowerTarget? {
         val pci = snapshot.pci ?: return null
         val earfcn = snapshot.earfcn ?: return null
-        val explicitEnodeb = snapshot.raw["enodeb_id"]
-            ?.trim()
-            ?.takeIf { it.isNotBlank() && it != "--" }
-        val derivedEnodeb = snapshot.cellId
-            ?.takeIf { it > 0 }
-            ?.let { (it shr 8).toString() }
+        val derivedEnodeb = derivedEnodebId(snapshot.cellId)
         return TowerTarget(
             pci = pci,
             earfcn = earfcn,
             band = snapshot.lteBand,
             cellId = snapshot.cellId,
-            enodebId = explicitEnodeb ?: derivedEnodeb
+            enodebId = derivedEnodeb
         )
     }
 
@@ -81,13 +77,14 @@ class TowerLockEngine(
         if (pci == null || earfcn == null) return TowerMatch.UNKNOWN
         if (pci != target.pci || earfcn != target.earfcn) return TowerMatch.DRIFTED
 
-        if (target.cellId != null && snapshot.cellId != null && target.cellId != snapshot.cellId) {
-            return TowerMatch.RADIO_MATCH_ID_CHANGED
+        // Cell ID is stronger identity evidence than an opaque enodeb_id field. If both sides expose
+        // it, compare it directly. We no longer treat raw enodeb_id as numeric evidence because its
+        // radix/format is firmware-specific and can otherwise create a false physical-tower claim.
+        if (target.cellId != null && snapshot.cellId != null) {
+            return if (target.cellId == snapshot.cellId) TowerMatch.MATCHED else TowerMatch.RADIO_MATCH_ID_CHANGED
         }
-        val currentEnodeb = snapshot.raw["enodeb_id"]
-            ?.trim()
-            ?.takeIf { it.isNotBlank() && it != "--" }
-            ?: snapshot.cellId?.takeIf { it > 0 }?.let { (it shr 8).toString() }
+
+        val currentEnodeb = derivedEnodebId(snapshot.cellId)
         if (target.enodebId != null && currentEnodeb != null && target.enodebId != currentEnodeb) {
             return TowerMatch.RADIO_MATCH_ID_CHANGED
         }
@@ -125,7 +122,7 @@ class TowerLockEngine(
             repaired = false,
             message = when (match) {
                 TowerMatch.MATCHED -> "تم حفظ القفل وقراءته مرة أخرى، والخلية الحالية تطابق الهدف"
-                TowerMatch.RADIO_MATCH_ID_CHANGED -> "القفل محفوظ، لكن Cell ID/eNodeB لا يطابق الهوية الأصلية؛ لن يدّعي التطبيق ثبات البرج الفيزيائي"
+                TowerMatch.RADIO_MATCH_ID_CHANGED -> "القفل محفوظ، لكن Cell ID الموثق لا يطابق الهوية الأصلية؛ لن يدّعي التطبيق ثبات البرج الفيزيائي"
                 TowerMatch.DRIFTED -> "القفل محفوظ في الراوتر لكن الخلية الحية لا تطابق الهدف"
                 TowerMatch.UNKNOWN -> "القفل محفوظ، لكن بيانات الخلية الحية غير كافية للتحقق"
             }
@@ -151,7 +148,7 @@ class TowerLockEngine(
                 match,
                 consecutiveDriftSamples,
                 false,
-                if (match == TowerMatch.RADIO_MATCH_ID_CHANGED) "تغيّرت هوية البرج رغم تطابق PCI/EARFCN" else "اكتُشف انتقال عن الخلية المستهدفة"
+                if (match == TowerMatch.RADIO_MATCH_ID_CHANGED) "تغيّرت هوية الخلية رغم تطابق PCI/EARFCN" else "اكتُشف انتقال عن الخلية المستهدفة"
             )
         }
 
@@ -314,13 +311,11 @@ class TowerLockEngine(
         return value.takeIf { it in min..max }
     }
 
-    private fun parseZtePciToken(value: String?, max: Int): Int? {
-        val text = value?.trim()?.removePrefix("0x")?.removePrefix("0X").orEmpty()
-        if (text.isBlank()) return null
-        val hex = text.toIntOrNull(16)
-        if (hex != null && hex in 0..max) return hex
-        return text.toIntOrNull(10)?.takeIf { it in 0..max }
-    }
+    private fun parseZtePciToken(value: String?, max: Int): Int? =
+        ZteRadioIdParser.parseInt(value, max, client.profile.radioIdEncoding)
+
+    private fun derivedEnodebId(cellId: Long?): String? =
+        cellId?.takeIf { it > 0 }?.let { (it shr 8).toString() }
 
     private fun normalizeBand(raw: String?, nr: Boolean): String? {
         val number = Regex("\\d+").find(raw.orEmpty())?.value?.toIntOrNull() ?: return null

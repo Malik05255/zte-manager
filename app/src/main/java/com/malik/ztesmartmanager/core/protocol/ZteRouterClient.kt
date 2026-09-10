@@ -60,7 +60,10 @@ class ZteRouterClient(private val routerAddress: String) {
     }
 
     suspend fun readSnapshot(): RouterSnapshot =
-        ZteSnapshotParser.parse(readRaw(profile.statusFields))
+        ZteSnapshotParser.parse(
+            json = readRaw(profile.statusFields),
+            radioIdEncoding = profile.radioIdEncoding
+        )
 
     suspend fun readRaw(fields: Set<String>): JSONObject = transport.getJson(
         path = GET_PATH,
