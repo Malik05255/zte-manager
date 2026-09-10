@@ -19,6 +19,9 @@ data class SavedRouterCredential(
 /**
  * Stores the router administration password encrypted with an Android Keystore key.
  * The password is never written to SharedPreferences as plaintext.
+ *
+ * Disk writes use commit(), not apply(), so callers only receive success after the encrypted
+ * credential is durably written. Callers should execute load/save/clear off the main thread.
  */
 class SecureRouterCredentialStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -56,13 +59,14 @@ class SecureRouterCredentialStore(context: Context) {
             .putString(KEY_ADDRESS, routerAddress.trim())
             .putString(KEY_PASSWORD, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .apply()
-        true
+            .commit()
     }.getOrDefault(false)
 
-    fun clear() {
-        preferences.edit().remove(KEY_ADDRESS).remove(KEY_PASSWORD).remove(KEY_IV).apply()
-    }
+    fun clear(): Boolean = preferences.edit()
+        .remove(KEY_ADDRESS)
+        .remove(KEY_PASSWORD)
+        .remove(KEY_IV)
+        .commit()
 
     private fun getOrCreateKey(): SecretKey {
         val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
