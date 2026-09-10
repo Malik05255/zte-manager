@@ -40,6 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityAnalyzer
+import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityLevel
+import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityReport
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetryHistory
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetrySample
 import com.malik.ztesmartmanager.core.diagnostics.SupportBundleBuilder
@@ -67,12 +70,7 @@ private val RuntimeBarGoldDeep = Color(0xFF876126)
 private val RuntimeBarGood = Color(0xFF567D5B)
 private val RuntimeBarWarn = Color(0xFFA96432)
 
-/**
- * Runtime-capability shell around the premium dashboard.
- *
- * UI callbacks are blocked unless the current snapshot exposes the required firmware evidence.
- * The protocol client still repeats its own fresh probe immediately before every radio write.
- */
+/** Runtime-capability shell around the premium dashboard. */
 @Composable
 fun RuntimeAwareFinalDashboard(
     snapshot: RouterSnapshot?,
@@ -129,14 +127,16 @@ fun RuntimeAwareFinalDashboard(
             telemetrySamples = telemetryHistory.snapshot()
         }
     }
+    val stability = remember(telemetrySamples) { ConnectionStabilityAnalyzer.analyze(telemetrySamples) }
 
-    val supportBundle = remember(snapshot, runtime, telemetrySamples, capabilities.modelFamily) {
+    val supportBundle = remember(snapshot, runtime, telemetrySamples, stability, capabilities.modelFamily) {
         SupportBundleBuilder.build(
             appVersion = BuildConfig.VERSION_NAME,
             modelFamily = capabilities.modelFamily,
             snapshot = snapshot,
             runtime = runtime,
-            history = telemetrySamples
+            history = telemetrySamples,
+            stability = stability
         )
     }
 
@@ -179,6 +179,7 @@ fun RuntimeAwareFinalDashboard(
     ) {
         RuntimeCapabilityBar(
             report = runtime,
+            stability = stability,
             expanded = detailsExpanded,
             onToggle = { if (runtime != null) detailsExpanded = !detailsExpanded },
             modifier = Modifier.fillMaxWidth()
@@ -186,6 +187,7 @@ fun RuntimeAwareFinalDashboard(
         if (detailsExpanded && runtime != null) {
             RuntimeCapabilityDetails(
                 report = runtime,
+                stability = stability,
                 historyCount = telemetrySamples.size,
                 onCopyBundle = ::copySupportBundle,
                 onShareBundle = ::shareSupportBundle,
@@ -222,35 +224,23 @@ fun RuntimeAwareFinalDashboard(
                     if (!enabled || !blocked(RuntimeAction.LTE_BAND_WRITE)) onSmartModeChange(enabled)
                 },
                 onSmartGoalChange = onSmartGoalChange,
-                onOptimizeNow = {
-                    if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onOptimizeNow()
-                },
+                onOptimizeNow = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onOptimizeNow() },
                 onLteToggle = onLteToggle,
                 onNrToggle = onNrToggle,
-                onApplyLte = {
-                    if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onApplyLte()
-                },
-                onApplyNr = {
-                    if (!blocked(RuntimeAction.NR_BAND_WRITE)) onApplyNr()
-                },
+                onApplyLte = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onApplyLte() },
+                onApplyNr = { if (!blocked(RuntimeAction.NR_BAND_WRITE)) onApplyNr() },
                 onSetNetworkMode = { mode ->
                     if (!blocked(RuntimeAction.NETWORK_MODE_WRITE)) onSetNetworkMode(mode)
                 },
                 onAntennaState = { state ->
                     if (!blocked(RuntimeAction.ANTENNA_WRITE)) onAntennaState(state)
                 },
-                onScanCells = {
-                    if (!blocked(RuntimeAction.NEIGHBOR_SCAN)) onScanCells()
-                },
-                onLockCurrentCell = {
-                    if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockCurrentCell()
-                },
+                onScanCells = { if (!blocked(RuntimeAction.NEIGHBOR_SCAN)) onScanCells() },
+                onLockCurrentCell = { if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockCurrentCell() },
                 onLockNearbyCell = { cell ->
                     if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onLockNearbyCell(cell)
                 },
-                onClearCellLock = {
-                    if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onClearCellLock()
-                },
+                onClearCellLock = { if (!blocked(RuntimeAction.CELL_LOCK_WRITE)) onClearCellLock() },
                 onTowerGuardChange = { enabled ->
                     if (!enabled || !blocked(RuntimeAction.CELL_LOCK_WRITE)) onTowerGuardChange(enabled)
                 },
@@ -263,6 +253,7 @@ fun RuntimeAwareFinalDashboard(
 @Composable
 private fun RuntimeCapabilityBar(
     report: RuntimeCapabilityReport?,
+    stability: ConnectionStabilityReport,
     expanded: Boolean,
     onToggle: () -> Unit,
     modifier: Modifier = Modifier
@@ -282,7 +273,7 @@ private fun RuntimeCapabilityBar(
                         if (report == null) {
                             "جاري جمع دليل read-back..."
                         } else {
-                            "${RuntimeCapabilityAccess.writeReadyCount(report)}/${RuntimeCapabilityAccess.writeActionCount()} مسارات كتابة جاهزة للمحاولة • ${if (expanded) "إخفاء التفاصيل" else "اضغط للتفاصيل"}"
+                            "${RuntimeCapabilityAccess.writeReadyCount(report)}/${RuntimeCapabilityAccess.writeActionCount()} مسارات كتابة جاهزة • ${runtimeStabilityHeadline(stability)} • ${if (expanded) "إخفاء التفاصيل" else "اضغط للتفاصيل"}"
                         },
                         color = RuntimeBarMuted,
                         fontSize = 7.sp
@@ -313,6 +304,7 @@ private fun RuntimeCapabilityBar(
 @Composable
 private fun RuntimeCapabilityDetails(
     report: RuntimeCapabilityReport,
+    stability: ConnectionStabilityReport,
     historyCount: Int,
     onCopyBundle: () -> Unit,
     onShareBundle: () -> Unit,
@@ -327,10 +319,13 @@ private fun RuntimeCapabilityDetails(
         Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
             Text("تفاصيل دليل الـFirmware", color = RuntimeBarInk, fontSize = 10.sp, fontWeight = FontWeight.Black)
             Text(
-                "«جاهز للمحاولة» لا يعني نجاح الأمر مسبقًا؛ قبل أي كتابة يعيد التطبيق probe جديدًا ثم لا يعلن النجاح إلا بعد read-back مطابق.",
+                "«جاهز للمحاولة» لا يعني نجاح الأمر مسبقًا؛ قبل أي كتابة يعاد probe ثم لا يعلن النجاح إلا بعد read-back مطابق.",
                 color = RuntimeBarMuted,
                 fontSize = 7.sp
             )
+            Spacer(Modifier.size(5.dp))
+            RuntimeStabilitySummary(stability)
+            Spacer(Modifier.size(5.dp))
             Text(
                 "تقرير الدعم لا ينسخ raw كاملًا؛ يحتوي قياسات الراديو المنظمة ودليل الـFirmware وأقصى حد 30 قراءة من الجلسة الحالية.",
                 color = RuntimeBarMuted,
@@ -349,12 +344,52 @@ private fun RuntimeCapabilityDetails(
                 contentPadding = PaddingValues(bottom = 2.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)
             ) {
-                items(details, key = { it.key }) { detail ->
-                    RuntimeCapabilityDetailRow(detail)
-                }
+                items(details, key = { it.key }) { detail -> RuntimeCapabilityDetailRow(detail) }
             }
         }
     }
+}
+
+@Composable
+private fun RuntimeStabilitySummary(report: ConnectionStabilityReport) {
+    val color = when (report.level) {
+        ConnectionStabilityLevel.STABLE -> RuntimeBarGood
+        ConnectionStabilityLevel.VARIABLE -> RuntimeBarGoldDeep
+        ConnectionStabilityLevel.UNSTABLE -> RuntimeBarWarn
+        ConnectionStabilityLevel.INSUFFICIENT -> RuntimeBarMuted
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, color.copy(alpha = 0.32f), RoundedCornerShape(14.dp))
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("ثبات الجلسة", color = RuntimeBarInk, fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            Text(runtimeStabilityHeadline(report), color = color, fontSize = 7.sp, fontWeight = FontWeight.Black)
+        }
+        Text(report.summary, color = RuntimeBarMuted, fontSize = 6.sp)
+        if (report.score != null) {
+            val primary = buildList {
+                report.cellStabilityPercent?.let { add("الخلية $it%") }
+                report.modeStabilityPercent?.let { add("الوضع $it%") }
+                report.signalStabilityPercent?.let { add("الإشارة $it%") }
+            }
+            val presence = buildList {
+                report.nrActivePercent?.let { add("5G نشط $it%") }
+                report.caActivePercent?.let { add("CA نشط $it%") }
+            }
+            if (primary.isNotEmpty()) Text(primary.joinToString(" • "), color = RuntimeBarGoldDeep, fontSize = 6.sp)
+            if (presence.isNotEmpty()) Text(presence.joinToString(" • "), color = RuntimeBarMuted, fontSize = 6.sp)
+        }
+    }
+}
+
+private fun runtimeStabilityHeadline(report: ConnectionStabilityReport): String = when (report.level) {
+    ConnectionStabilityLevel.STABLE -> "ثابت ${report.score ?: "—"}/100"
+    ConnectionStabilityLevel.VARIABLE -> "متذبذب ${report.score ?: "—"}/100"
+    ConnectionStabilityLevel.UNSTABLE -> "غير مستقر ${report.score ?: "—"}/100"
+    ConnectionStabilityLevel.INSUFFICIENT -> "الثبات: ${report.sampleCount}/5 قراءات"
 }
 
 @Composable
@@ -380,13 +415,7 @@ private fun RuntimeCapabilityDetailRow(detail: RuntimeCapabilityDetail) {
             .padding(horizontal = 8.dp, vertical = 6.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                detail.title,
-                color = RuntimeBarInk,
-                fontSize = 8.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
+            Text(detail.title, color = RuntimeBarInk, fontSize = 8.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
             Text(detail.accessKind, color = RuntimeBarMuted, fontSize = 6.sp)
             Spacer(Modifier.size(6.dp))
             Text(detail.stateLabel, color = color, fontSize = 7.sp, fontWeight = FontWeight.Black)

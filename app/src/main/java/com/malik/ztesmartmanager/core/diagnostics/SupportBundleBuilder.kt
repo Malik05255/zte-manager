@@ -13,6 +13,7 @@ object SupportBundleBuilder {
         snapshot: RouterSnapshot?,
         runtime: RuntimeCapabilityReport?,
         history: List<SafeTelemetrySample>,
+        stability: ConnectionStabilityReport? = null,
         generatedAtEpochMs: Long = System.currentTimeMillis()
     ): String {
         val root = JSONObject()
@@ -24,6 +25,7 @@ object SupportBundleBuilder {
 
         snapshot?.let { root.put("live", liveObject(it)) }
         runtime?.let { root.put("runtime_capabilities", capabilityArray(it)) }
+        stability?.let { root.put("connection_stability", stabilityObject(it)) }
 
         val samples = JSONArray()
         history.takeLast(MAX_HISTORY_SAMPLES).forEach { samples.put(sampleObject(it)) }
@@ -76,6 +78,20 @@ object SupportBundleBuilder {
                 put("evidence_fields", JSONArray(detail.evidenceFields))
             })
         }
+    }
+
+    private fun stabilityObject(report: ConnectionStabilityReport): JSONObject = JSONObject().apply {
+        put("sample_count", report.sampleCount)
+        put("level", report.level.name)
+        putOptional("score", report.score)
+        putOptional("cell_stability_percent", report.cellStabilityPercent)
+        putOptional("mode_stability_percent", report.modeStabilityPercent)
+        putOptional("signal_stability_percent", report.signalStabilityPercent)
+        putOptional("nr_active_percent", report.nrActivePercent)
+        putOptional("ca_active_percent", report.caActivePercent)
+        put("cell_switches", report.cellSwitches)
+        put("mode_switches", report.modeSwitches)
+        put("summary", report.summary)
     }
 
     private fun sampleObject(sample: SafeTelemetrySample): JSONObject = JSONObject().apply {
