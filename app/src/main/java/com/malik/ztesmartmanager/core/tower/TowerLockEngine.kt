@@ -36,7 +36,13 @@ data class NearbyCell(
     val arfcn: Int?,
     val rsrp: Double?,
     val rsrq: Double?,
-    val sinr: Double?
+    val sinr: Double?,
+    val samplesSeen: Int = 1,
+    val samplesTotal: Int = 1,
+    val presencePercent: Int = 100,
+    val stabilityScore: Int? = null,
+    val evidenceScore: Int? = null,
+    val confidence: CellConfidence? = null
 )
 
 /**
@@ -167,10 +173,37 @@ class TowerLockEngine(
     }
 
     /**
-     * Read-only discovery. We support both newer structured arrays and the older MC801A
-     * ngbr_cell_info string. Missing/unknown data returns an empty list; no cells are invented.
+     * Multi-sample read-only discovery. Five scans are used by default so a one-off neighbor does
+     * not outrank a stable cell. The identity key is RAT + PCI + ARFCN, so cells sharing the same
+     * frequency remain distinct when their PCI differs.
      */
-    suspend fun readNearbyCells(): List<NearbyCell> {
+    suspend fun scanNearbyCells(
+        requestedSamples: Int = DEFAULT_SCAN_SAMPLES,
+        intervalMs: Long = DEFAULT_SCAN_INTERVAL_MS
+    ): TowerScanReport {
+        val sampleCount = requestedSamples.coerceIn(MIN_SCAN_SAMPLES, MAX_SCAN_SAMPLES)
+        val pause = intervalMs.coerceIn(MIN_SCAN_INTERVAL_MS, MAX_SCAN_INTERVAL_MS)
+        val startedAt = System.currentTimeMillis()
+        val samples = mutableListOf<List<NearbyCell>>()
+
+        repeat(sampleCount) { index ->
+            runCatching { readNearbyCellsOnce() }
+                .onSuccess { samples.add(it) }
+            if (index < sampleCount - 1) delay(pause)
+        }
+
+        return TowerScanReport(
+            requestedSamples = sampleCount,
+            successfulSamples = samples.size,
+            rankedCells = TowerScanAggregator.rank(samples),
+            elapsedMs = (System.currentTimeMillis() - startedAt).coerceAtLeast(0L)
+        )
+    }
+
+    /** Existing callers now receive the evidence-ranked multi-sample result. */
+    suspend fun readNearbyCells(): List<NearbyCell> = scanNearbyCells().cells
+
+    private suspend fun readNearbyCellsOnce(): List<NearbyCell> {
         val raw = client.readRaw(
             setOf(
                 "neighbor_cell_info",
@@ -209,7 +242,6 @@ class TowerLockEngine(
         }
             .filter { it.pci != null && it.arfcn != null }
             .distinctBy { Triple(it.rat, it.pci, it.arfcn) }
-            .sortedWith(compareByDescending<NearbyCell> { it.rsrp ?: -999.0 }.thenBy { it.arfcn })
     }
 
     private fun parseLegacyNeighborCells(value: String?): List<NearbyCell> {
@@ -298,5 +330,11 @@ class TowerLockEngine(
     companion object {
         private const val DRIFT_SAMPLES_BEFORE_REPAIR = 3
         private const val REPAIR_COOLDOWN_MS = 30_000L
+        private const val DEFAULT_SCAN_SAMPLES = 5
+        private const val MIN_SCAN_SAMPLES = 3
+        private const val MAX_SCAN_SAMPLES = 8
+        private const val DEFAULT_SCAN_INTERVAL_MS = 650L
+        private const val MIN_SCAN_INTERVAL_MS = 250L
+        private const val MAX_SCAN_INTERVAL_MS = 1_500L
     }
 }
