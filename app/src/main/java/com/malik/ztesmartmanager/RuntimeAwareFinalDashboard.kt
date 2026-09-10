@@ -56,6 +56,7 @@ fun RuntimeAwareFinalDashboard(
     towerGuardStatus: TowerGuardStatus?,
     onDisconnect: () -> Unit,
     onSpeedTest: () -> Unit,
+    onRefreshSnapshot: () -> Unit,
     onPlacementToggle: () -> Unit,
     onSmartModeChange: (Boolean) -> Unit,
     onSmartGoalChange: (OptimizationGoal) -> Unit,
@@ -190,6 +191,7 @@ fun RuntimeAwareFinalDashboard(
         towerGuardStatus = towerGuardStatus,
         onDisconnect = onDisconnect,
         onSpeedTest = onSpeedTest,
+        onRefreshSnapshot = onRefreshSnapshot,
         onPlacementToggle = onPlacementToggle,
         onSmartModeChange = { enabled ->
             if (!enabled || !blocked(RuntimeAction.LTE_BAND_WRITE)) onSmartModeChange(enabled)
@@ -200,9 +202,7 @@ fun RuntimeAwareFinalDashboard(
         onNrToggle = onNrToggle,
         onApplyLte = { if (!blocked(RuntimeAction.LTE_BAND_WRITE)) onApplyLte() },
         onApplyNr = {
-            if (!blocked(RuntimeAction.NR_BAND_WRITE) && nrWritePreflightPassed()) {
-                onApplyNr()
-            }
+            if (!blocked(RuntimeAction.NR_BAND_WRITE) && nrWritePreflightPassed()) onApplyNr()
         },
         onSetNetworkMode = { mode ->
             if (!blocked(RuntimeAction.NETWORK_MODE_WRITE)) onSetNetworkMode(mode)
