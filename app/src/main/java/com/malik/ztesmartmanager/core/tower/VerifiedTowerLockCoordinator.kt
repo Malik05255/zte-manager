@@ -5,6 +5,7 @@ import kotlinx.coroutines.delay
 
 data class VerifiedTowerLockResult(
     val success: Boolean,
+    val writeAttempted: Boolean,
     val target: TowerTarget?,
     val fingerprint: TowerFingerprint?,
     val validation: CandidateValidation,
@@ -23,24 +24,24 @@ class VerifiedTowerLockCoordinator(
     suspend fun lock(candidate: NearbyCell): VerifiedTowerLockResult {
         val validation = engine.revalidateCandidate(candidate)
         if (!validation.valid) {
-            return VerifiedTowerLockResult(false, null, null, validation, validation.message)
+            return VerifiedTowerLockResult(false, false, null, null, validation, validation.message)
         }
 
         val observed = validation.observed ?: return VerifiedTowerLockResult(
-            false, null, null, validation, "فشل فحص ما قبل القفل رغم اكتمال المسح؛ لم يُرسل أمر"
+            false, false, null, null, validation, "فشل فحص ما قبل القفل رغم اكتمال المسح؛ لم يُرسل أمر"
         )
-        val pci = observed.pci ?: return VerifiedTowerLockResult(false, null, null, validation, "PCI غير متاح")
-        val arfcn = observed.arfcn ?: return VerifiedTowerLockResult(false, null, null, validation, "EARFCN غير متاح")
+        val pci = observed.pci ?: return VerifiedTowerLockResult(false, false, null, null, validation, "PCI غير متاح")
+        val arfcn = observed.arfcn ?: return VerifiedTowerLockResult(false, false, null, null, validation, "EARFCN غير متاح")
 
         val write = client.setCellLock(pci, arfcn)
         if (!write.success || !write.verified) {
-            return VerifiedTowerLockResult(false, null, null, validation, write.message)
+            return VerifiedTowerLockResult(false, true, null, null, validation, write.message)
         }
 
         delay(1_500)
         val after = runCatching { client.readSnapshot() }.getOrNull()
             ?: return VerifiedTowerLockResult(
-                false, null, null, validation,
+                false, true, null, null, validation,
                 "تمت قراءة القفل من الراوتر لكن تعذر قراءة الخلية الحية؛ لن نسجل نجاحًا أو بصمة"
             )
 
@@ -54,7 +55,7 @@ class VerifiedTowerLockCoordinator(
         val match = engine.compare(requestedTarget, after)
         if (match != TowerMatch.MATCHED) {
             return VerifiedTowerLockResult(
-                false, null, null, validation,
+                false, true, null, null, validation,
                 "القفل محفوظ لكن الخلية الحية لا تطابق PCI/EARFCN بعد الانتظار؛ لن نسجل نجاحًا أو بصمة"
             )
         }
@@ -76,6 +77,7 @@ class VerifiedTowerLockCoordinator(
 
         return VerifiedTowerLockResult(
             success = true,
+            writeAttempted = true,
             target = liveTarget,
             fingerprint = fingerprint,
             validation = validation,
