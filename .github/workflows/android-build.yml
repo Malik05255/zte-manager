@@ -39,7 +39,7 @@ jobs:
           echo "ZTE_VERSION_NAME=0.5.8.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Run truth-first unit tests
-        run: gradle :app:testDebugUnitTest --stacktrace
+        run: gradle :app:testDebugUnitTest --stacktrace --info
 
       - name: Run Android lint
         run: gradle :app:lintDebug --stacktrace
