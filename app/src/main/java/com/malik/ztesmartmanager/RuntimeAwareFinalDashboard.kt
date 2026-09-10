@@ -46,6 +46,9 @@ import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityReport
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetryHistory
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetrySample
 import com.malik.ztesmartmanager.core.diagnostics.SupportBundleBuilder
+import com.malik.ztesmartmanager.core.diagnostics.TrafficTelemetry
+import com.malik.ztesmartmanager.core.diagnostics.TrafficTelemetryFormatter
+import com.malik.ztesmartmanager.core.diagnostics.TrafficTelemetryParser
 import com.malik.ztesmartmanager.core.model.RouterCapabilities
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
 import com.malik.ztesmartmanager.core.model.RuntimeCapabilityReport
@@ -128,6 +131,7 @@ fun RuntimeAwareFinalDashboard(
         }
     }
     val stability = remember(telemetrySamples) { ConnectionStabilityAnalyzer.analyze(telemetrySamples) }
+    val traffic = remember(snapshot?.raw) { snapshot?.let { TrafficTelemetryParser.parse(it.raw) } }
 
     val supportBundle = remember(snapshot, runtime, telemetrySamples, stability, capabilities.modelFamily) {
         SupportBundleBuilder.build(
@@ -184,6 +188,7 @@ fun RuntimeAwareFinalDashboard(
             onToggle = { if (runtime != null) detailsExpanded = !detailsExpanded },
             modifier = Modifier.fillMaxWidth()
         )
+        RuntimeTrafficStrip(traffic = traffic, modifier = Modifier.fillMaxWidth())
         if (detailsExpanded && runtime != null) {
             RuntimeCapabilityDetails(
                 report = runtime,
@@ -247,6 +252,82 @@ fun RuntimeAwareFinalDashboard(
                 onRestoreSafetyBackup = onRestoreSafetyBackup
             )
         }
+    }
+}
+
+@Composable
+private fun RuntimeTrafficStrip(traffic: TrafficTelemetry?, modifier: Modifier = Modifier) {
+    val available = traffic?.hasAnyEvidence == true
+    Card(
+        modifier = modifier.padding(horizontal = 10.dp, vertical = 1.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = RuntimeBarBg)
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("حركة البيانات", color = RuntimeBarInk, fontSize = 9.sp, fontWeight = FontWeight.Black)
+                    Text(
+                        if (available) "قراءة مباشرة من عدادات الراوتر • ليست Speed Test" else "عدادات Traffic غير متاحة على هذا الـFirmware",
+                        color = RuntimeBarMuted,
+                        fontSize = 6.sp
+                    )
+                }
+                Text(
+                    if (available) "READ ONLY" else "UNAVAILABLE",
+                    color = if (available) RuntimeBarGood else RuntimeBarMuted,
+                    fontSize = 6.sp,
+                    fontWeight = FontWeight.Black
+                )
+            }
+
+            if (available && traffic != null) {
+                Spacer(Modifier.size(5.dp))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    TrafficMetric(
+                        title = "↓ الآن",
+                        value = TrafficTelemetryFormatter.rateMbps(traffic.rxBytesPerSecond),
+                        suffix = "Mb/s",
+                        modifier = Modifier.weight(1f)
+                    )
+                    TrafficMetric(
+                        title = "↑ الآن",
+                        value = TrafficTelemetryFormatter.rateMbps(traffic.txBytesPerSecond),
+                        suffix = "Mb/s",
+                        modifier = Modifier.weight(1f)
+                    )
+                    TrafficMetric(
+                        title = traffic.monthMarker?.let { "الشهر $it" } ?: "هذا الشهر",
+                        value = "↓ ${TrafficTelemetryFormatter.bytes(traffic.monthlyRxBytes)}",
+                        suffix = "↑ ${TrafficTelemetryFormatter.bytes(traffic.monthlyTxBytes)}",
+                        modifier = Modifier.weight(1.45f)
+                    )
+                }
+                val sessionEvidence = traffic.sessionRxBytes != null || traffic.sessionTxBytes != null || traffic.sessionSeconds != null
+                if (sessionEvidence) {
+                    Text(
+                        "الجلسة: ↓ ${TrafficTelemetryFormatter.bytes(traffic.sessionRxBytes)} • ↑ ${TrafficTelemetryFormatter.bytes(traffic.sessionTxBytes)} • ${TrafficTelemetryFormatter.duration(traffic.sessionSeconds)}",
+                        color = RuntimeBarMuted,
+                        fontSize = 6.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrafficMetric(title: String, value: String, suffix: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .border(1.dp, RuntimeBarGoldDeep.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 6.dp, vertical = 5.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(title, color = RuntimeBarMuted, fontSize = 6.sp, maxLines = 1)
+        Text(value, color = RuntimeBarInk, fontSize = 9.sp, fontWeight = FontWeight.Black, maxLines = 1)
+        Text(suffix, color = RuntimeBarGoldDeep, fontSize = 6.sp, maxLines = 1)
     }
 }
 
