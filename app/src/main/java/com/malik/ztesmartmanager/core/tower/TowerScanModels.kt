@@ -29,7 +29,17 @@ data class TowerScanReport(
     val rankedCells: List<RankedNearbyCell>,
     val elapsedMs: Long
 ) {
-    val cells: List<NearbyCell> get() = rankedCells.map { it.cell }
+    val cells: List<NearbyCell>
+        get() = rankedCells.map { ranked ->
+            ranked.cell.copy(
+                samplesSeen = ranked.seenSamples,
+                samplesTotal = ranked.successfulSamples,
+                presencePercent = ranked.presencePercent,
+                stabilityScore = ranked.stabilityScore,
+                evidenceScore = ranked.evidenceScore,
+                confidence = ranked.confidence
+            )
+        }
 
     val message: String
         get() = when {
