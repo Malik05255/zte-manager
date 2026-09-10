@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,19 +44,15 @@ import com.malik.ztesmartmanager.core.tower.TowerTarget
 private val RuntimeBarBg = Color(0xFFF7F2E9)
 private val RuntimeBarInk = Color(0xFF2A241E)
 private val RuntimeBarMuted = Color(0xFF776E63)
-private val RuntimeBarGold = Color(0xFFD2A84D)
 private val RuntimeBarGoldDeep = Color(0xFF876126)
 private val RuntimeBarGood = Color(0xFF567D5B)
 private val RuntimeBarWarn = Color(0xFFA96432)
-private val RuntimeBarLine = Color(0xFFD2C8B9)
 
 /**
- * Thin runtime-capability shell around the existing premium dashboard.
+ * Runtime-capability shell around the premium dashboard.
  *
- * The original dashboard stays responsible for presentation. This shell owns the last UI gate so
- * every write path follows the same firmware evidence rule before the callback can reach the
- * activity/client. The protocol client still repeats the probe immediately before the write, so
- * this is not a replacement for backend verification.
+ * UI callbacks are blocked unless the current snapshot exposes the required firmware evidence.
+ * The protocol client still repeats its own fresh probe immediately before every radio write.
  */
 @Composable
 fun RuntimeAwareFinalDashboard(
@@ -220,7 +215,7 @@ private fun RuntimeCapabilityBar(report: RuntimeCapabilityReport?, modifier: Mod
                 }
                 Text(
                     if (report == null) "PROBING" else if (report.safeWriteCount > 0) "RUNTIME VERIFIED" else "READ ONLY",
-                    color = if (report?.safeWriteCount ?: 0 > 0) RuntimeBarGood else RuntimeBarWarn,
+                    color = if ((report?.safeWriteCount ?: 0) > 0) RuntimeBarGood else RuntimeBarWarn,
                     fontSize = 6.sp,
                     fontWeight = FontWeight.Black
                 )
