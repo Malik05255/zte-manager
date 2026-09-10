@@ -51,8 +51,8 @@ object TowerGuardResumeVerifier {
             )
         }
 
-        val pci = strictPositiveOrZero(configuredPci)
-        val earfcn = strictPositiveOrZero(configuredEarfcn)
+        val pci = strictConfiguredLockValue(configuredPci)
+        val earfcn = strictConfiguredLockValue(configuredEarfcn)
         if (pci == null || earfcn == null) {
             return TowerGuardResumeDecision(
                 TowerGuardResumeKind.CONFIG_UNKNOWN,
@@ -117,9 +117,12 @@ object TowerGuardResumeVerifier {
         }
     }
 
-    private fun strictPositiveOrZero(value: String?): Int? {
-        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        if (!text.all(Char::isDigit)) return null
+    /** null means the field was not exposed; blank/0/0x0 means explicitly unlocked. */
+    private fun strictConfiguredLockValue(value: String?): Int? {
+        if (value == null) return null
+        val text = value.trim()
+        if (text.isBlank() || text == "0" || text.equals("0x0", true)) return 0
+        if (!text.all { it.isDigit() }) return null
         return text.toIntOrNull()?.takeIf { it >= 0 }
     }
 }
