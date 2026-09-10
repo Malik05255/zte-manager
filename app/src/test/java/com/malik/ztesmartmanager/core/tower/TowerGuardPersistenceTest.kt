@@ -117,6 +117,40 @@ class TowerGuardPersistenceTest {
     }
 
     @Test
+    fun blankReadBack_staysUnknownBecauseAbsentAndBlankCannotBeDistinguishedHere() {
+        val decision = TowerGuardResumeVerifier.decide(
+            saved = state(true),
+            currentRouterAddress = "192.168.0.1",
+            currentProfileId = "zte-mc801a",
+            configuredPci = "",
+            configuredEarfcn = "1300",
+            liveMatch = TowerMatch.MATCHED
+        )
+
+        assertEquals(TowerGuardResumeKind.CONFIG_UNKNOWN, decision.kind)
+        assertNull(decision.target)
+        assertFalse(decision.enableGuard)
+        assertFalse(decision.discardPersistedState)
+    }
+
+    @Test
+    fun explicitZeroUnlockedReadBack_discardsStaleTarget() {
+        val decision = TowerGuardResumeVerifier.decide(
+            saved = state(true),
+            currentRouterAddress = "192.168.0.1",
+            currentProfileId = "zte-mc801a",
+            configuredPci = "0",
+            configuredEarfcn = "0",
+            liveMatch = TowerMatch.MATCHED
+        )
+
+        assertEquals(TowerGuardResumeKind.STALE, decision.kind)
+        assertNull(decision.target)
+        assertFalse(decision.enableGuard)
+        assertTrue(decision.discardPersistedState)
+    }
+
+    @Test
     fun profileMismatch_discardsBeforeUsingLockEvidence() {
         val decision = TowerGuardResumeVerifier.decide(
             saved = state(true),
