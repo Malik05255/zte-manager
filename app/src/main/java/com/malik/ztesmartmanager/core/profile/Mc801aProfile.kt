@@ -45,12 +45,12 @@ object Mc801aProfile : RouterProfile {
         "nr5g_pci", "nr5g_cell_id", "nr5g_action_channel", "nr5g_action_band", "nr5g_action_nsa_band",
         "nr_ca_pcell_band", "nr_ca_pcell_freq", "nr_ca_pcell_bandwidth", "nr_multi_ca_scell_info",
 
-        // Newer goform firmwares expose structured current/neighbor/locked cell arrays.
-        // These are read-only probes; unsupported MC801A firmware simply leaves them empty.
-        "current_cell_info", "neighbor_cell_info", "locked_cell_info",
+        // Both structured and legacy neighbor surfaces are probed read-only.
+        "current_cell_info", "neighbor_cell_info", "locked_cell_info", "ngbr_cell_info",
 
         "pm_sensor_ambient", "pm_sensor_mdm", "pm_sensor_5g", "pm_modem_5g", "pm_sensor_pa1", "wifi_chip_temp",
-        "lte_band_lock", "nr5g_sa_band_lock", "nr5g_nsa_band_lock",
+        "lte_band_lock", "lte_band_mask",
+        "nr5g_band_lock", "nr5g_band_mask", "nr5g_sa_band_lock", "nr5g_nsa_band_lock",
         "lte_pci_lock", "lte_earfcn_lock", "loginfo"
     )
 
