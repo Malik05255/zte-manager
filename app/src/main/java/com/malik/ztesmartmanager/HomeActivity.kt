@@ -14,18 +14,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
@@ -49,13 +49,16 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.malik.ztesmartmanager.core.model.CellRole
-import com.malik.ztesmartmanager.core.model.RouterCapabilities
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
 import com.malik.ztesmartmanager.core.protocol.ZteRouterClient
 import com.malik.ztesmartmanager.core.smart.NetworkPerformance
 import com.malik.ztesmartmanager.core.smart.NetworkPerformanceProbe
 import com.malik.ztesmartmanager.core.smart.OptimizationGoal
 import com.malik.ztesmartmanager.core.smart.SmartBandOptimizer
+import com.malik.ztesmartmanager.core.tower.NearbyCell
+import com.malik.ztesmartmanager.core.tower.TowerLockEngine
+import com.malik.ztesmartmanager.core.tower.TowerMatch
+import com.malik.ztesmartmanager.core.tower.TowerTarget
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -96,13 +99,16 @@ private fun ZteHomeApp() {
     var status by remember { mutableStateOf("غير متصل") }
     var message by remember { mutableStateOf("") }
     var connectBusy by remember { mutableStateOf(false) }
-    var controlBusy by remember { mutableStateOf(false) }
     var speedBusy by remember { mutableStateOf(false) }
     var optimizeBusy by remember { mutableStateOf(false) }
+    var towerBusy by remember { mutableStateOf(false) }
     var performance by remember { mutableStateOf<NetworkPerformance?>(null) }
-    var selectedLte by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    var selectedNr by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    var showBandControls by rememberSaveable { mutableStateOf(false) }
+    var towerEngine by remember { mutableStateOf<TowerLockEngine?>(null) }
+    var towerTarget by remember { mutableStateOf<TowerTarget?>(null) }
+    var towerGuardEnabled by rememberSaveable { mutableStateOf(false) }
+    var towerGuardMessage by remember { mutableStateOf("") }
+    var nearbyCells by remember { mutableStateOf<List<NearbyCell>>(emptyList()) }
+    var neighborBusy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val probe = remember { NetworkPerformanceProbe() }
 
@@ -117,13 +123,13 @@ private fun ZteHomeApp() {
                 val first = connected.readSnapshot()
                 client = connected
                 snapshot = first
-                selectedLte = currentLteBandsHome(first)
-                selectedNr = currentNrBandsHome(first)
+                towerEngine = TowerLockEngine(connected)
                 status = "متصل • ${profile.capabilities.modelFamily}"
                 message = ""
             }.onFailure {
                 client = null
                 snapshot = null
+                towerEngine = null
                 status = it.message ?: "تعذر الاتصال بالراوتر"
             }
             connectBusy = false
@@ -147,35 +153,82 @@ private fun ZteHomeApp() {
 
     fun optimizeNetwork() {
         val connected = client ?: return
-        if (optimizeBusy || controlBusy) return
+        if (optimizeBusy || towerBusy) return
         scope.launch {
             optimizeBusy = true
-            message = "جاري تحليل الترددات واختيار الأفضل..."
+            message = "جاري اختبار الخيارات واختيار الأفضل..."
             runCatching {
                 SmartBandOptimizer(connected).optimizeOnce(OptimizationGoal.BALANCED) { message = it }
             }.onSuccess { report ->
                 message = report.message
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
-                selectedLte = snapshot?.let(::currentLteBandsHome).orEmpty()
-                selectedNr = snapshot?.let(::currentNrBandsHome).orEmpty()
                 performance = report.best.performance
+                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
             }.onFailure { message = "تعذر تحسين الشبكة: ${it.message.orEmpty()}" }
             optimizeBusy = false
         }
     }
 
-    LaunchedEffect(client) {
-        val connected = client ?: return@LaunchedEffect
-        while (client === connected) {
-            delay(2_000)
-            if (controlBusy || optimizeBusy) continue
-            runCatching { connected.readSnapshot() }.onSuccess { snapshot = it }
+    fun lockCurrentTower() {
+        val engine = towerEngine ?: return
+        val current = snapshot ?: return
+        if (towerBusy) return
+        scope.launch {
+            towerBusy = true
+            message = "جاري تثبيت البرج الحالي والتحقق..."
+            runCatching { engine.lockCurrent(current) }
+                .onSuccess { result ->
+                    towerTarget = result.target
+                    towerGuardMessage = result.message
+                    towerGuardEnabled = result.match == TowerMatch.MATCHED
+                    message = result.message
+                }
+                .onFailure { message = "تعذر تثبيت البرج: ${it.message.orEmpty()}" }
+            towerBusy = false
         }
     }
 
-    val connected = client
-    if (connected == null) {
-        HomeLoginScreen(
+    fun discoverNearbyCells() {
+        val engine = towerEngine ?: return
+        if (neighborBusy) return
+        scope.launch {
+            neighborBusy = true
+            message = "جاري قراءة الخلايا القريبة من الراوتر..."
+            runCatching { engine.readNearbyCells() }
+                .onSuccess { cells ->
+                    nearbyCells = cells
+                    message = if (cells.isEmpty()) {
+                        "هذا الـFirmware لا يعرض قائمة Neighbor Cells؛ لا توجد بيانات موثوقة لعرض أبراج قريبة"
+                    } else {
+                        "تم العثور على ${cells.size} خلية يمكن للراوتر رؤيتها"
+                    }
+                }
+                .onFailure { message = "تعذر قراءة الخلايا القريبة: ${it.message.orEmpty()}" }
+            neighborBusy = false
+        }
+    }
+
+    LaunchedEffect(client, towerGuardEnabled, towerTarget) {
+        val connected = client ?: return@LaunchedEffect
+        val engine = towerEngine ?: return@LaunchedEffect
+        while (client === connected) {
+            delay(2_000)
+            if (optimizeBusy || towerBusy) continue
+            val latest = runCatching { connected.readSnapshot() }.getOrNull() ?: continue
+            snapshot = latest
+
+            val target = towerTarget
+            if (towerGuardEnabled && target != null) {
+                val guard = runCatching { engine.guardOnce(target, latest) }.getOrNull()
+                if (guard != null) {
+                    towerGuardMessage = guard.message
+                    if (guard.repaired) message = guard.message
+                }
+            }
+        }
+    }
+
+    if (client == null) {
+        LoginPanel(
             routerAddress = routerAddress,
             onRouterAddressChange = { routerAddress = it },
             password = password,
@@ -184,75 +237,45 @@ private fun ZteHomeApp() {
             busy = connectBusy,
             onConnect = ::connect
         )
-        return
+    } else {
+        HomeDashboard(
+            snapshot = snapshot,
+            status = status,
+            message = message,
+            performance = performance,
+            speedBusy = speedBusy,
+            optimizeBusy = optimizeBusy,
+            towerBusy = towerBusy,
+            neighborBusy = neighborBusy,
+            towerTarget = towerTarget,
+            towerGuardEnabled = towerGuardEnabled,
+            towerGuardMessage = towerGuardMessage,
+            nearbyCells = nearbyCells,
+            onMeasureSpeed = ::measureSpeed,
+            onOptimize = ::optimizeNetwork,
+            onLockCurrentTower = ::lockCurrentTower,
+            onDiscoverNearbyCells = ::discoverNearbyCells,
+            onTowerGuardChange = { enabled ->
+                towerGuardEnabled = enabled && towerTarget != null
+                if (!towerGuardEnabled) towerGuardMessage = "Tower Guard متوقف"
+            },
+            onDisconnect = {
+                client = null
+                snapshot = null
+                towerEngine = null
+                towerTarget = null
+                towerGuardEnabled = false
+                nearbyCells = emptyList()
+                performance = null
+                message = ""
+                status = "غير متصل"
+            }
+        )
     }
-
-    HomeDashboard(
-        snapshot = snapshot,
-        capabilities = connected.profile.capabilities,
-        status = status,
-        message = message,
-        performance = performance,
-        speedBusy = speedBusy,
-        optimizeBusy = optimizeBusy,
-        controlBusy = controlBusy,
-        selectedLte = selectedLte,
-        selectedNr = selectedNr,
-        showBandControls = showBandControls,
-        onMeasureSpeed = ::measureSpeed,
-        onOptimize = ::optimizeNetwork,
-        onToggleBandControls = { showBandControls = !showBandControls },
-        onLteToggle = { band -> selectedLte = toggleHome(selectedLte, band) },
-        onNrToggle = { band -> selectedNr = toggleHome(selectedNr, band) },
-        onApplyLte = {
-            if (selectedLte.isNotEmpty() && !controlBusy) scope.launch {
-                controlBusy = true
-                message = connected.setLteBands(selectedLte).message
-                delay(900)
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
-                controlBusy = false
-            }
-        },
-        onApplyNr = {
-            if (selectedNr.isNotEmpty() && !controlBusy) scope.launch {
-                controlBusy = true
-                message = connected.setNrBands(selectedNr).message
-                delay(900)
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
-                controlBusy = false
-            }
-        },
-        onSetNetworkMode = { mode ->
-            if (!controlBusy) scope.launch {
-                controlBusy = true
-                message = connected.setNetworkMode(mode).message
-                delay(700)
-                snapshot = runCatching { connected.readSnapshot() }.getOrNull() ?: snapshot
-                controlBusy = false
-            }
-        },
-        onLockCurrentCell = {
-            val current = snapshot
-            val pci = current?.pci
-            val earfcn = current?.earfcn
-            if (pci != null && earfcn != null && !controlBusy) scope.launch {
-                controlBusy = true
-                message = connected.setCellLock(pci, earfcn).message
-                controlBusy = false
-            }
-        },
-        onDisconnect = {
-            client = null
-            snapshot = null
-            performance = null
-            message = ""
-            status = "غير متصل"
-        }
-    )
 }
 
 @Composable
-private fun HomeLoginScreen(
+private fun LoginPanel(
     routerAddress: String,
     onRouterAddressChange: (String) -> Unit,
     password: String,
@@ -261,12 +284,9 @@ private fun HomeLoginScreen(
     busy: Boolean,
     onConnect: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
         Text("ZTE Manager", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("واجهة مباشرة لحالة الشبكة والتحكم", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("إدارة الشبكة والبرج من مكان واحد", color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(24.dp))
         OutlinedTextField(
             value = routerAddress,
@@ -287,11 +307,9 @@ private fun HomeLoginScreen(
             modifier = Modifier.fillMaxWidth()
         )
         Spacer(Modifier.height(16.dp))
-        Button(
-            onClick = onConnect,
-            enabled = !busy && password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth()
-        ) { Text(if (busy) "جاري الاتصال..." else "اتصال") }
+        Button(onClick = onConnect, enabled = !busy && password.isNotBlank(), modifier = Modifier.fillMaxWidth()) {
+            Text(if (busy) "جاري الاتصال..." else "اتصال")
+        }
         Spacer(Modifier.height(10.dp))
         Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
@@ -300,25 +318,22 @@ private fun HomeLoginScreen(
 @Composable
 private fun HomeDashboard(
     snapshot: RouterSnapshot?,
-    capabilities: RouterCapabilities,
     status: String,
     message: String,
     performance: NetworkPerformance?,
     speedBusy: Boolean,
     optimizeBusy: Boolean,
-    controlBusy: Boolean,
-    selectedLte: Set<Int>,
-    selectedNr: Set<Int>,
-    showBandControls: Boolean,
+    towerBusy: Boolean,
+    neighborBusy: Boolean,
+    towerTarget: TowerTarget?,
+    towerGuardEnabled: Boolean,
+    towerGuardMessage: String,
+    nearbyCells: List<NearbyCell>,
     onMeasureSpeed: () -> Unit,
     onOptimize: () -> Unit,
-    onToggleBandControls: () -> Unit,
-    onLteToggle: (Int) -> Unit,
-    onNrToggle: (Int) -> Unit,
-    onApplyLte: () -> Unit,
-    onApplyNr: () -> Unit,
-    onSetNetworkMode: (String) -> Unit,
-    onLockCurrentCell: () -> Unit,
+    onLockCurrentTower: () -> Unit,
+    onDiscoverNearbyCells: () -> Unit,
+    onTowerGuardChange: (Boolean) -> Unit,
     onDisconnect: () -> Unit
 ) {
     val context = LocalContext.current
@@ -328,11 +343,7 @@ private fun HomeDashboard(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column {
                     Text("ZTE Manager", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(status, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -343,66 +354,48 @@ private fun HomeDashboard(
 
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                NetworkStatusCard(snapshot, Modifier.weight(1f))
+                NetworkCard(snapshot, Modifier.weight(1f))
                 SpeedCard(performance, speedBusy, onMeasureSpeed, Modifier.weight(1f))
             }
         }
 
         snapshot?.let { data ->
             item { PerformanceCard(data) }
-            item { TowerMapCard(data) }
+            item {
+                TowerCard(
+                    snapshot = data,
+                    towerTarget = towerTarget,
+                    guardEnabled = towerGuardEnabled,
+                    guardMessage = towerGuardMessage,
+                    busy = towerBusy,
+                    neighborBusy = neighborBusy,
+                    onLock = onLockCurrentTower,
+                    onDiscover = onDiscoverNearbyCells,
+                    onGuardChange = onTowerGuardChange
+                )
+            }
+        }
+
+        if (nearbyCells.isNotEmpty()) {
+            item { Text("الخلايا القريبة التي يعرضها الراوتر", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            items(nearbyCells) { cell -> NearbyCellCard(cell) }
         }
 
         if (message.isNotBlank()) item { MessageCard(message) }
 
         item {
-            ControlToolsCard(
-                optimizeBusy = optimizeBusy,
-                controlBusy = controlBusy,
-                showBandControls = showBandControls,
-                onToggleBandControls = onToggleBandControls,
-                onOptimize = onOptimize,
-                onOpenAdvanced = { context.startActivity(Intent(context, MainActivity::class.java)) }
-            )
-        }
-
-        if (showBandControls) {
-            item { NetworkModeCompactCard(controlBusy, onSetNetworkMode) }
-            if (capabilities.supportsLteBandLock) {
-                item {
-                    CompactBandSelector(
-                        title = "ترددات 4G",
-                        bands = capabilities.supportedLteBands,
-                        selected = selectedLte,
-                        prefix = "B",
-                        busy = controlBusy,
-                        onToggle = onLteToggle,
-                        onApply = onApplyLte
-                    )
-                }
-            }
-            if (capabilities.supportsNrBandLock) {
-                item {
-                    CompactBandSelector(
-                        title = "ترددات 5G",
-                        bands = capabilities.supportedNrBands,
-                        selected = selectedNr,
-                        prefix = "N",
-                        busy = controlBusy,
-                        onToggle = onNrToggle,
-                        onApply = onApplyNr
-                    )
-                }
-            }
-            snapshot?.let { data ->
-                if (capabilities.supportsCellLock && data.pci != null && data.earfcn != null) {
-                    item {
-                        OutlinedButton(
-                            onClick = onLockCurrentCell,
-                            enabled = !controlBusy,
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("تثبيت الخلية الحالية • PCI ${data.pci}") }
+            Card(shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                    Text("التحكم والأدوات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = onOptimize, enabled = !optimizeBusy && !towerBusy, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (optimizeBusy) "جاري التحسين..." else "تحسين الشبكة تلقائيًا")
                     }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = { context.startActivity(Intent(context, MainActivity::class.java)) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("قفل الترددات والأدوات المتقدمة") }
                 }
             }
         }
@@ -410,54 +403,37 @@ private fun HomeDashboard(
 }
 
 @Composable
-private fun NetworkStatusCard(snapshot: RouterSnapshot?, modifier: Modifier = Modifier) {
-    val type = snapshot?.let(::connectionTypeHome) ?: "—"
+private fun NetworkCard(snapshot: RouterSnapshot?, modifier: Modifier = Modifier) {
     val nrActive = snapshot?.raw?.get("_zte_nr_active").equals("true", ignoreCase = true)
-    val rsrp = when {
-        snapshot == null -> null
-        nrActive -> snapshot.nrRsrp ?: snapshot.lteRsrp
-        else -> snapshot.lteRsrp
-    }
-    val sinr = when {
-        snapshot == null -> null
-        nrActive -> snapshot.nrSinr ?: snapshot.lteSinr
-        else -> snapshot.lteSinr
-    }
-
+    val rsrp = if (nrActive) snapshot?.nrRsrp ?: snapshot?.lteRsrp else snapshot?.lteRsrp
+    val sinr = if (nrActive) snapshot?.nrSinr ?: snapshot?.lteSinr else snapshot?.lteSinr
     Card(modifier = modifier, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Text("حالة الشبكة", fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text(type, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+            Text(snapshot?.let(::connectionType) ?: "—", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
-            Text("RSRP: ${rsrp?.let(::formatHome) ?: "—"} dBm", style = MaterialTheme.typography.bodySmall)
-            Text("SINR: ${sinr?.let(::formatHome) ?: "—"} dB", style = MaterialTheme.typography.bodySmall)
+            Text("RSRP: ${rsrp?.let(::formatNumber) ?: "—"} dBm", style = MaterialTheme.typography.bodySmall)
+            Text("SINR: ${sinr?.let(::formatNumber) ?: "—"} dB", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
 
 @Composable
-private fun SpeedCard(
-    performance: NetworkPerformance?,
-    busy: Boolean,
-    onMeasureSpeed: () -> Unit,
-    modifier: Modifier = Modifier
-) {
+private fun SpeedCard(performance: NetworkPerformance?, busy: Boolean, onMeasure: () -> Unit, modifier: Modifier = Modifier) {
     Card(modifier = modifier, shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("السرعة الحالية", fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             Text(
-                performance?.downloadMbps?.let { "${formatHome(it)} Mb/s" } ?: "— Mb/s",
+                performance?.downloadMbps?.let { "${formatNumber(it)} Mb/s" } ?: "— Mb/s",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary
             )
-            performance?.latencyMs?.let {
-                Text("Ping ${formatHome(it)} ms", style = MaterialTheme.typography.bodySmall)
-            } ?: Spacer(Modifier.height(18.dp))
+            Text(performance?.latencyMs?.let { "Ping ${formatNumber(it)} ms" } ?: " ", style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
-            Button(onClick = onMeasureSpeed, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+            Button(onClick = onMeasure, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                 Text(if (busy) "قياس..." else "قياس السرعة")
             }
         }
@@ -466,135 +442,97 @@ private fun SpeedCard(
 
 @Composable
 private fun PerformanceCard(snapshot: RouterSnapshot) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(20.dp)
-    ) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(18.dp)) {
             Text("الأداء", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            HomeInfoRow("اسم الشبكة", operatorNameHome(snapshot))
-            HomeInfoRow("نوع الاتصال", connectionTypeHome(snapshot))
-            HomeInfoRow("حالة الترددات", bandStateHome(snapshot))
-        }
-    }
-}
-
-@Composable
-private fun TowerMapCard(snapshot: RouterSnapshot) {
-    val detected = snapshot.cells.size.coerceAtLeast(if (snapshot.pci != null) 1 else 0)
-    Card(shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp)) {
-            Text("خريطة الأبراج", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            Text("الأبراج/الخلايا المكتشفة من الراوتر: $detected", fontWeight = FontWeight.SemiBold)
-            Text(
-                "لن يعرض التطبيق نقاطًا جغرافية وهمية. الراوتر الحالي يرسل PCI/Cell ID والترددات، لكنه لا يرسل إحداثيات البرج؛ ستظهر الخريطة الجغرافية فقط عند ربط مصدر إحداثيات موثوق.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            InfoRow("اسم الشبكة", operatorName(snapshot))
+            InfoRow("نوع الاتصال", connectionType(snapshot))
+            InfoRow("الترددات", activeBands(snapshot))
+            InfoRow("Carrier Aggregation", if (snapshot.caActive) "نشط" else "غير نشط الآن")
         }
     }
 }
 
 @Composable
-private fun ControlToolsCard(
-    optimizeBusy: Boolean,
-    controlBusy: Boolean,
-    showBandControls: Boolean,
-    onToggleBandControls: () -> Unit,
-    onOptimize: () -> Unit,
-    onOpenAdvanced: () -> Unit
-) {
-    Card(shape = RoundedCornerShape(20.dp)) {
-        Column(Modifier.fillMaxWidth().padding(18.dp)) {
-            Text("التحكم والأدوات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onToggleBandControls, enabled = !controlBusy, modifier = Modifier.weight(1f)) {
-                    Text(if (showBandControls) "إخفاء الترددات" else "قفل الترددات")
-                }
-                Button(onClick = onOptimize, enabled = !optimizeBusy && !controlBusy, modifier = Modifier.weight(1f)) {
-                    Text(if (optimizeBusy) "تحسين..." else "تحسين الشبكة")
-                }
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onOpenAdvanced, modifier = Modifier.fillMaxWidth()) {
-                Text("الأدوات المتقدمة والتشخيص")
-            }
-        }
-    }
-}
-
-@Composable
-private fun NetworkModeCompactCard(busy: Boolean, onSetNetworkMode: (String) -> Unit) {
-    Card(shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text("وضع الشبكة", fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                OutlinedButton(onClick = { onSetNetworkMode("Only_LTE") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("4G") }
-                OutlinedButton(onClick = { onSetNetworkMode("LTE_AND_5G") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("4G+5G") }
-                OutlinedButton(onClick = { onSetNetworkMode("Only_5G") }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("5G") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CompactBandSelector(
-    title: String,
-    bands: Set<Int>,
-    selected: Set<Int>,
-    prefix: String,
+private fun TowerCard(
+    snapshot: RouterSnapshot,
+    towerTarget: TowerTarget?,
+    guardEnabled: Boolean,
+    guardMessage: String,
     busy: Boolean,
-    onToggle: (Int) -> Unit,
-    onApply: () -> Unit
+    neighborBusy: Boolean,
+    onLock: () -> Unit,
+    onDiscover: () -> Unit,
+    onGuardChange: (Boolean) -> Unit
 ) {
-    Card(shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text(title, fontWeight = FontWeight.Bold)
+    val currentCellId = snapshot.cellId?.toString() ?: "—"
+    val enodeb = snapshot.raw["enodeb_id"]?.takeIf { it.isNotBlank() } ?: "—"
+    Card(shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(18.dp)) {
+            Text("البرج والخلية", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
-            bands.sorted().chunked(4).forEach { rowBands ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    rowBands.forEach { band ->
-                        FilterChip(
-                            selected = band in selected,
-                            onClick = { onToggle(band) },
-                            label = { Text("$prefix$band") },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    repeat(4 - rowBands.size) { Spacer(Modifier.weight(1f)) }
-                }
+            InfoRow("PCI", snapshot.pci?.toString() ?: "—")
+            InfoRow("EARFCN", snapshot.earfcn?.toString() ?: "—")
+            InfoRow("Cell ID", currentCellId)
+            InfoRow("eNodeB", enodeb)
+            InfoRow("Band", snapshot.lteBand ?: "—")
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = onLock,
+                enabled = !busy && snapshot.pci != null && snapshot.earfcn != null,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(if (busy) "جاري التثبيت والتحقق..." else "تثبيت على هذا البرج") }
+            Spacer(Modifier.height(7.dp))
+            OutlinedButton(onClick = onDiscover, enabled = !neighborBusy, modifier = Modifier.fillMaxWidth()) {
+                Text(if (neighborBusy) "جاري البحث..." else "عرض الخلايا/الأبراج القريبة")
             }
             Spacer(Modifier.height(10.dp))
-            Button(onClick = onApply, enabled = selected.isNotEmpty() && !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("تطبيق والتحقق")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Tower Guard", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        if (towerTarget == null) "ثبّت برجًا أولًا" else guardMessage.ifBlank { "يراقب عدم انتقال الراوتر لبرج آخر" },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(checked = guardEnabled, onCheckedChange = onGuardChange, enabled = towerTarget != null)
             }
+        }
+    }
+}
+
+@Composable
+private fun NearbyCellCard(cell: NearbyCell) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
+            Text("${cell.rat} • ${cell.band ?: "Band غير معروف"}", fontWeight = FontWeight.Bold)
+            InfoRow("PCI", cell.pci?.toString() ?: "—")
+            InfoRow("ARFCN", cell.arfcn?.toString() ?: "—")
+            InfoRow("RSRP", cell.rsrp?.let { "${formatNumber(it)} dBm" } ?: "—")
+            InfoRow("SINR", cell.sinr?.let { "${formatNumber(it)} dB" } ?: "—")
+            InfoRow("RSRQ", cell.rsrq?.let { "${formatNumber(it)} dB" } ?: "—")
         }
     }
 }
 
 @Composable
 private fun MessageCard(message: String) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        shape = RoundedCornerShape(16.dp)
-    ) {
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(16.dp)) {
         Text(message, modifier = Modifier.fillMaxWidth().padding(14.dp))
     }
 }
 
 @Composable
-private fun HomeInfoRow(label: String, value: String) {
+private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(label, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(value, fontWeight = FontWeight.Medium)
     }
 }
 
-private fun connectionTypeHome(snapshot: RouterSnapshot): String {
+private fun connectionType(snapshot: RouterSnapshot): String {
     val mode = snapshot.raw["_zte_radio_mode"].orEmpty()
     val nrActive = snapshot.raw["_zte_nr_active"].equals("true", ignoreCase = true)
     return when {
@@ -608,13 +546,10 @@ private fun connectionTypeHome(snapshot: RouterSnapshot): String {
     }
 }
 
-private fun operatorNameHome(snapshot: RouterSnapshot): String {
-    val raw = listOf("network_provider", "network_operator", "operator_name", "spn_name")
-        .asSequence()
-        .mapNotNull { snapshot.raw[it]?.trim()?.takeIf(String::isNotBlank) }
-        .firstOrNull()
-    if (raw != null) return raw
-
+private fun operatorName(snapshot: RouterSnapshot): String {
+    val provider = listOf("network_provider", "network_provider_fullname", "network_operator", "operator_name")
+        .asSequence().mapNotNull { snapshot.raw[it]?.trim()?.takeIf(String::isNotBlank) }.firstOrNull()
+    if (provider != null) return provider
     return when (snapshot.operatorCode?.filter(Char::isDigit)) {
         "42001" -> "stc ksa"
         "42003" -> "Mobily"
@@ -623,34 +558,18 @@ private fun operatorNameHome(snapshot: RouterSnapshot): String {
     }
 }
 
-private fun bandStateHome(snapshot: RouterSnapshot): String {
-    val lte = buildList {
-        extractBandHome(snapshot.lteBand)?.let { add("B$it") }
-        snapshot.cells.filter { it.role != CellRole.NR }.forEach { cell ->
-            extractBandHome(cell.band)?.let { band -> if ("B$band" !in this) add("B$band") }
+private fun activeBands(snapshot: RouterSnapshot): String {
+    val bands = buildList {
+        snapshot.cells.forEach { cell ->
+            val label = cell.band?.uppercase()?.takeIf { it.isNotBlank() } ?: return@forEach
+            if (label !in this) add(label)
+        }
+        snapshot.lteBand?.uppercase()?.let { if (it !in this) add(it) }
+        if (snapshot.raw["_zte_nr_active"].equals("true", true)) {
+            snapshot.nrBand?.uppercase()?.let { if (it !in this) add(it) }
         }
     }
-    val nr = buildList {
-        extractBandHome(snapshot.nrBand)?.let { add("N$it") }
-        snapshot.cells.filter { it.role == CellRole.NR }.forEach { cell ->
-            extractBandHome(cell.band)?.let { band -> if ("N$band" !in this) add("N$band") }
-        }
-    }
-    val bands = (lte + nr).joinToString(" + ").ifBlank { "غير معروف" }
-    val aggregation = if (snapshot.caActive) "مدمجة" else "غير مدمجة"
-    return "$bands | $aggregation"
+    return bands.joinToString(" + ").ifBlank { "—" }
 }
 
-private fun currentLteBandsHome(snapshot: RouterSnapshot): Set<Int> = buildSet {
-    extractBandHome(snapshot.lteBand)?.let(::add)
-    snapshot.cells.filter { it.role != CellRole.NR }.forEach { extractBandHome(it.band)?.let(::add) }
-}
-
-private fun currentNrBandsHome(snapshot: RouterSnapshot): Set<Int> = buildSet {
-    extractBandHome(snapshot.nrBand)?.let(::add)
-    snapshot.cells.filter { it.role == CellRole.NR }.forEach { extractBandHome(it.band)?.let(::add) }
-}
-
-private fun extractBandHome(value: String?): Int? = Regex("\\d+").find(value.orEmpty())?.value?.toIntOrNull()?.takeIf { it > 0 }
-private fun toggleHome(current: Set<Int>, band: Int): Set<Int> = if (band in current) current - band else current + band
-private fun formatHome(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
+private fun formatNumber(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else "%.1f".format(value)
