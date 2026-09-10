@@ -17,7 +17,7 @@ object SupportBundleBuilder {
         generatedAtEpochMs: Long = System.currentTimeMillis()
     ): String {
         val root = JSONObject()
-            .put("schema_version", 2)
+            .put("schema_version", 3)
             .put("generated_at_epoch_ms", generatedAtEpochMs)
             .put("app_version", appVersion)
             .put("model_family", modelFamily)
@@ -27,6 +27,8 @@ object SupportBundleBuilder {
             root.put("live", liveObject(it))
             val traffic = TrafficTelemetryParser.parse(it.raw)
             if (traffic.hasAnyEvidence) root.put("traffic", trafficObject(traffic))
+            val thermal = ThermalTelemetryParser.parse(it.raw)
+            if (thermal.hasAnyEvidence) root.put("thermal", thermalObject(thermal))
         }
         runtime?.let { root.put("runtime_capabilities", capabilityArray(it)) }
         stability?.let { root.put("connection_stability", stabilityObject(it)) }
@@ -80,6 +82,26 @@ object SupportBundleBuilder {
         putOptional("monthly_tx_bytes", traffic.monthlyTxBytes)
         putOptional("monthly_seconds", traffic.monthlySeconds)
         putOptional("month_marker", traffic.monthMarker)
+    }
+
+    private fun thermalObject(thermal: ThermalTelemetry): JSONObject = JSONObject().apply {
+        val readings = JSONArray()
+        thermal.readings.forEach { reading ->
+            readings.put(JSONObject().apply {
+                put("key", reading.key)
+                put("label", reading.label)
+                put("celsius", reading.celsius)
+            })
+        }
+        put("readings", readings)
+        thermal.highestObserved?.let { highest ->
+            put("highest_observed", JSONObject().apply {
+                put("key", highest.key)
+                put("label", highest.label)
+                put("celsius", highest.celsius)
+            })
+        }
+        put("interpretation", "raw sensor readings only; no safety threshold inferred")
     }
 
     private fun capabilityArray(report: RuntimeCapabilityReport): JSONArray = JSONArray().apply {
