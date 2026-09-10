@@ -32,6 +32,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,12 +47,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.malik.ztesmartmanager.core.network.AndroidRouterGatewayDetector
+import com.malik.ztesmartmanager.core.presentation.RouterLoginGatewayPolicy
+import com.malik.ztesmartmanager.core.storage.SecureRouterCredentialStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private val LoginBgTop = Color(0xFFF8FAFD)
 private val LoginBgBottom = Color(0xFFEDF3F8)
@@ -71,7 +84,38 @@ fun ZteRouterLoginScreen(
     busy: Boolean,
     onConnect: () -> Unit
 ) {
+    val context = LocalContext.current
+    val credentialStore = remember(context) { SecureRouterCredentialStore(context) }
+    var userEditedAddress by rememberSaveable { mutableStateOf(false) }
+    var credentialSaveFailed by remember { mutableStateOf(false) }
     val isError = status.startsWith("تعذر") || status.contains("رفض") || status.contains("خطأ")
+
+    // The app default is 192.168.0.1, but many routers use another private gateway such as
+    // 192.168.1.1. Adopt Android's active Wi-Fi gateway only before the user edits the address.
+    LaunchedEffect(Unit) {
+        val detected = withContext(Dispatchers.IO) { AndroidRouterGatewayDetector.detect(context) }
+        if (RouterLoginGatewayPolicy.shouldAdoptDetectedGateway(
+                currentAddress = routerAddress,
+                detectedGateway = detected,
+                userEditedAddress = userEditedAddress
+            )
+        ) {
+            onRouterAddressChange(detected!!)
+        }
+    }
+
+    // "حفظ كلمة المرور" means save now, not only after a successful router login. Debouncing avoids
+    // a keystore write on every keystroke while still making the checked state reliable.
+    LaunchedEffect(rememberPassword, routerAddress, password) {
+        if (rememberPassword && routerAddress.isNotBlank() && password.isNotBlank()) {
+            delay(250)
+            credentialSaveFailed = !withContext(Dispatchers.IO) {
+                credentialStore.save(routerAddress, password)
+            }
+        } else if (!rememberPassword) {
+            credentialSaveFailed = false
+        }
+    }
 
     Box(
         Modifier
@@ -113,7 +157,10 @@ fun ZteRouterLoginScreen(
                 Column(Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
                     OutlinedTextField(
                         value = routerAddress,
-                        onValueChange = onRouterAddressChange,
+                        onValueChange = {
+                            userEditedAddress = true
+                            onRouterAddressChange(it)
+                        },
                         label = { Text("عنوان الراوتر", fontSize = 14.sp) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         singleLine = true,
@@ -158,6 +205,15 @@ fun ZteRouterLoginScreen(
                             color = LoginInk,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    if (credentialSaveFailed) {
+                        Text(
+                            text = "تعذر حفظ كلمة المرور على هذا الجهاز",
+                            color = LoginError,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp)
                         )
                     }
 
