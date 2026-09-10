@@ -17,13 +17,17 @@ object SupportBundleBuilder {
         generatedAtEpochMs: Long = System.currentTimeMillis()
     ): String {
         val root = JSONObject()
-            .put("schema_version", 1)
+            .put("schema_version", 2)
             .put("generated_at_epoch_ms", generatedAtEpochMs)
             .put("app_version", appVersion)
             .put("model_family", modelFamily)
             .put("privacy", "raw credentials and SIM identifiers excluded")
 
-        snapshot?.let { root.put("live", liveObject(it)) }
+        snapshot?.let {
+            root.put("live", liveObject(it))
+            val traffic = TrafficTelemetryParser.parse(it.raw)
+            if (traffic.hasAnyEvidence) root.put("traffic", trafficObject(traffic))
+        }
         runtime?.let { root.put("runtime_capabilities", capabilityArray(it)) }
         stability?.let { root.put("connection_stability", stabilityObject(it)) }
 
@@ -64,6 +68,18 @@ object SupportBundleBuilder {
             })
         }
         put("carriers", carriers)
+    }
+
+    private fun trafficObject(traffic: TrafficTelemetry): JSONObject = JSONObject().apply {
+        putOptional("rx_bytes_per_second", traffic.rxBytesPerSecond)
+        putOptional("tx_bytes_per_second", traffic.txBytesPerSecond)
+        putOptional("session_rx_bytes", traffic.sessionRxBytes)
+        putOptional("session_tx_bytes", traffic.sessionTxBytes)
+        putOptional("session_seconds", traffic.sessionSeconds)
+        putOptional("monthly_rx_bytes", traffic.monthlyRxBytes)
+        putOptional("monthly_tx_bytes", traffic.monthlyTxBytes)
+        putOptional("monthly_seconds", traffic.monthlySeconds)
+        putOptional("month_marker", traffic.monthMarker)
     }
 
     private fun capabilityArray(report: RuntimeCapabilityReport): JSONArray = JSONArray().apply {

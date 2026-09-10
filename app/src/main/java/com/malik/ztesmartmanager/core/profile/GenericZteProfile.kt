@@ -24,6 +24,12 @@ object GenericZteProfile : RouterProfile {
         "network_provider", "network_provider_fullname", "rmcc", "rmnc", "mdm_mcc", "mdm_mnc",
         "signalbar", "modem_main_state", "ppp_status",
 
+        // Safe read-only WAN traffic fields observed across ZTE web firmware.
+        "realtime_tx_thrpt", "realtime_rx_thrpt",
+        "realtime_tx_bytes", "realtime_rx_bytes", "realtime_time",
+        "monthly_tx_bytes", "monthly_rx_bytes", "monthly_time", "date_month",
+        "wan_curr_tx_bytes", "wan_curr_rx_bytes", "wan_curr_conn_time",
+
         "rssi", "bandwidth", "tx_power",
         "lte_rsrp", "lte_rsrq", "lte_rssi", "lte_snr",
         "lte_rsrp_1", "lte_rsrp_2", "lte_rsrp_3", "lte_rsrp_4",
