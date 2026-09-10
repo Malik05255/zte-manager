@@ -1,9 +1,11 @@
 package com.malik.ztesmartmanager.core.protocol
 
+import com.malik.ztesmartmanager.core.profile.RadioIdEncoding
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,7 +13,7 @@ class ZteSnapshotParserTest {
 
     @Test
     fun endcWithCompleteNrEvidence_isVerified5gNsa() {
-        val snapshot = parse(
+        val snapshot = parseMc801a(
             "network_type" to "ENDC",
             "lte_ca_pcell_band" to "20",
             "lte_pci" to "1E6",
@@ -30,13 +32,14 @@ class ZteSnapshotParserTest {
         assertEquals("5G NSA / 4G", snapshot.networkType)
         assertEquals(486, snapshot.pci)
         assertEquals("N78", snapshot.nrBand)
+        assertEquals("HEX_FIRST", snapshot.raw["_zte_radio_id_encoding"])
         assertEquals("true", snapshot.raw["_zte_nr_active_verified"])
         assertNotNull(snapshot.nrRsrp)
     }
 
     @Test
     fun lteNsaWithStaleNrFields_doesNotClaim5g() {
-        val snapshot = parse(
+        val snapshot = parseMc801a(
             "network_type" to "LTE-NSA",
             "lte_ca_pcell_band" to "3",
             "lte_pci" to "64",
@@ -56,7 +59,7 @@ class ZteSnapshotParserTest {
 
     @Test
     fun configurationLikeStringContaining5g_isNotTreatedAsLiveRat() {
-        val snapshot = parse(
+        val snapshot = parseMc801a(
             "network_type" to "LTE_AND_5G",
             "nr5g_action_band" to "n78",
             "nr5g_action_channel" to "640000",
@@ -71,7 +74,7 @@ class ZteSnapshotParserTest {
 
     @Test
     fun caActiveFlagWithoutCompleteSecondaryCarrier_doesNotClaimCa() {
-        val snapshot = parse(
+        val snapshot = parseMc801a(
             "network_type" to "LTE",
             "lte_ca_pcell_band" to "20",
             "lte_pci" to "1E6",
@@ -88,7 +91,7 @@ class ZteSnapshotParserTest {
 
     @Test
     fun caActiveWithCompleteSecondaryCarrier_isVerified() {
-        val snapshot = parse(
+        val snapshot = parseMc801a(
             "network_type" to "LTE",
             "lte_ca_pcell_band" to "20",
             "lte_pci" to "1E6",
@@ -109,7 +112,7 @@ class ZteSnapshotParserTest {
 
     @Test
     fun conflictingCaFlags_areUnverified() {
-        val snapshot = parse(
+        val snapshot = parseMc801a(
             "network_type" to "LTE",
             "lte_ca_pcell_band" to "20",
             "lte_pci" to "1E6",
@@ -125,6 +128,48 @@ class ZteSnapshotParserTest {
         assertEquals("true", snapshot.raw["_zte_ca_state_conflict"])
     }
 
-    private fun parse(vararg values: Pair<String, String>) =
-        ZteSnapshotParser.parse(JSONObject(values.toMap()))
+    @Test
+    fun genericDigitOnlyPciAmbiguity_doesNotClaimLte() {
+        val snapshot = ZteSnapshotParser.parse(
+            JSONObject(
+                mapOf(
+                    "network_type" to "LTE",
+                    "lte_ca_pcell_band" to "3",
+                    "lte_pci" to "64",
+                    "wan_active_channel" to "1300",
+                    "lte_rsrp" to "-88"
+                )
+            ),
+            RadioIdEncoding.SAFE_AUTO
+        )
+
+        assertEquals("غير مؤكد", snapshot.networkType)
+        assertNull(snapshot.pci)
+        assertEquals("SAFE_AUTO", snapshot.raw["_zte_radio_id_encoding"])
+        assertEquals("", snapshot.raw["_zte_lte_pci_decoded"])
+        assertEquals("false", snapshot.raw["_zte_lte_active_verified"])
+    }
+
+    @Test
+    fun genericExplicitHexPci_canBeUsedBecauseRadixIsUnambiguous() {
+        val snapshot = ZteSnapshotParser.parse(
+            JSONObject(
+                mapOf(
+                    "network_type" to "LTE",
+                    "lte_ca_pcell_band" to "3",
+                    "lte_pci" to "0x64",
+                    "wan_active_channel" to "1300",
+                    "lte_rsrp" to "-88"
+                )
+            ),
+            RadioIdEncoding.SAFE_AUTO
+        )
+
+        assertEquals("4G", snapshot.networkType)
+        assertEquals(100, snapshot.pci)
+        assertEquals("100", snapshot.raw["_zte_lte_pci_decoded"])
+    }
+
+    private fun parseMc801a(vararg values: Pair<String, String>) =
+        ZteSnapshotParser.parse(JSONObject(values.toMap()), RadioIdEncoding.HEX_FIRST)
 }
