@@ -54,12 +54,18 @@ class TowerLockEngine(
     fun captureCurrent(snapshot: RouterSnapshot): TowerTarget? {
         val pci = snapshot.pci ?: return null
         val earfcn = snapshot.earfcn ?: return null
+        val explicitEnodeb = snapshot.raw["enodeb_id"]
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it != "--" }
+        val derivedEnodeb = snapshot.cellId
+            ?.takeIf { it > 0 }
+            ?.let { (it shr 8).toString() }
         return TowerTarget(
             pci = pci,
             earfcn = earfcn,
             band = snapshot.lteBand,
             cellId = snapshot.cellId,
-            enodebId = snapshot.raw["enodeb_id"]?.trim()?.takeIf { it.isNotBlank() && it != "--" }
+            enodebId = explicitEnodeb ?: derivedEnodeb
         )
     }
 
@@ -72,7 +78,10 @@ class TowerLockEngine(
         if (target.cellId != null && snapshot.cellId != null && target.cellId != snapshot.cellId) {
             return TowerMatch.RADIO_MATCH_ID_CHANGED
         }
-        val currentEnodeb = snapshot.raw["enodeb_id"]?.trim()?.takeIf { it.isNotBlank() && it != "--" }
+        val currentEnodeb = snapshot.raw["enodeb_id"]
+            ?.trim()
+            ?.takeIf { it.isNotBlank() && it != "--" }
+            ?: snapshot.cellId?.takeIf { it > 0 }?.let { (it shr 8).toString() }
         if (target.enodebId != null && currentEnodeb != null && target.enodebId != currentEnodeb) {
             return TowerMatch.RADIO_MATCH_ID_CHANGED
         }
@@ -157,13 +166,71 @@ class TowerLockEngine(
         )
     }
 
-    /** Read-only discovery. Unsupported firmware returns no cells rather than fabricated data. */
+    /**
+     * Read-only discovery. We support both newer structured arrays and the older MC801A
+     * ngbr_cell_info string. Missing/unknown data returns an empty list; no cells are invented.
+     */
     suspend fun readNearbyCells(): List<NearbyCell> {
-        val raw = client.readRaw(setOf("neighbor_cell_info", "current_cell_info", "locked_cell_info"))
+        val raw = client.readRaw(
+            setOf(
+                "neighbor_cell_info",
+                "current_cell_info",
+                "locked_cell_info",
+                "ngbr_cell_info",
+                "lte_pci",
+                "wan_active_channel",
+                "wan_active_band",
+                "lte_rsrp",
+                "lte_rsrq",
+                "lte_snr"
+            )
+        )
+
         return buildList {
             addAll(parseCellArray(raw.opt("current_cell_info")))
             addAll(parseCellArray(raw.opt("neighbor_cell_info")))
-        }.distinctBy { Triple(it.rat, it.pci, it.arfcn) }
+            addAll(parseLegacyNeighborCells(raw.optString("ngbr_cell_info")))
+
+            val currentPci = parseZtePciToken(raw.optString("lte_pci"), 503)
+            val currentArfcn = raw.optString("wan_active_channel").trim().toIntOrNull()?.takeIf { it > 0 }
+            if (currentPci != null && currentArfcn != null) {
+                add(
+                    NearbyCell(
+                        rat = "LTE",
+                        band = normalizeBand(raw.optString("wan_active_band"), false),
+                        pci = currentPci,
+                        arfcn = currentArfcn,
+                        rsrp = scaledSignal(raw.optString("lte_rsrp"), -170.0, -35.0),
+                        rsrq = scaledSignal(raw.optString("lte_rsrq"), -40.0, 0.0),
+                        sinr = scaledSignal(raw.optString("lte_snr"), -30.0, 60.0)
+                    )
+                )
+            }
+        }
+            .filter { it.pci != null && it.arfcn != null }
+            .distinctBy { Triple(it.rat, it.pci, it.arfcn) }
+            .sortedWith(compareByDescending<NearbyCell> { it.rsrp ?: -999.0 }.thenBy { it.arfcn })
+    }
+
+    private fun parseLegacyNeighborCells(value: String?): List<NearbyCell> {
+        if (value.isNullOrBlank()) return emptyList()
+        return value.trimEnd(';')
+            .split(';')
+            .mapNotNull { row ->
+                val fields = row.split(',').map { it.trim() }
+                if (fields.size < 4) return@mapNotNull null
+                val arfcn = fields[0].toIntOrNull()?.takeIf { it > 0 } ?: return@mapNotNull null
+                val pci = parseZtePciToken(fields[1], 503) ?: return@mapNotNull null
+                NearbyCell(
+                    rat = "LTE",
+                    band = null,
+                    pci = pci,
+                    arfcn = arfcn,
+                    rsrq = scaledSignal(fields[2], -40.0, 0.0),
+                    rsrp = scaledSignal(fields[3], -170.0, -35.0),
+                    sinr = null
+                )
+            }
     }
 
     private fun parseCellArray(value: Any?): List<NearbyCell> {
@@ -181,11 +248,12 @@ class TowerLockEngine(
                 val arfcn = positiveInt(item, "fcn") ?: positiveInt(item, "earfcn")
                 val isNr = rat == "16" || (arfcn ?: 0) > 65_535 ||
                     rawBand?.startsWith("N", true) == true || rawBand?.startsWith("NR", true) == true
+                val pci = parseZtePciToken(item.optString("pci"), if (isNr) 1007 else 503)
                 add(
                     NearbyCell(
                         rat = if (isNr) "NR" else "LTE",
                         band = normalizeBand(rawBand, isNr),
-                        pci = positiveInt(item, "pci"),
+                        pci = pci,
                         arfcn = arfcn,
                         rsrp = signal(item, "rsrp", -170.0, -35.0),
                         rsrq = signal(item, "rsrq", -40.0, 0.0),
@@ -199,13 +267,27 @@ class TowerLockEngine(
     private fun positiveInt(item: JSONObject, key: String): Int? =
         item.optString(key).trim().toIntOrNull()?.takeIf { it >= 0 }
 
-    private fun signal(item: JSONObject, key: String, min: Double, max: Double): Double? {
-        var value = item.optString(key).replace(Regex("[^0-9.\\-]"), "").toDoubleOrNull() ?: return null
+    private fun signal(item: JSONObject, key: String, min: Double, max: Double): Double? =
+        scaledSignal(item.optString(key), min, max)
+
+    private fun scaledSignal(text: String?, min: Double, max: Double): Double? {
+        var value = text
+            ?.replace(Regex("[^0-9.\\-]"), "")
+            ?.toDoubleOrNull()
+            ?: return null
         repeat(3) {
             if (value in min..max) return value
             value /= 10.0
         }
         return value.takeIf { it in min..max }
+    }
+
+    private fun parseZtePciToken(value: String?, max: Int): Int? {
+        val text = value?.trim()?.removePrefix("0x")?.removePrefix("0X").orEmpty()
+        if (text.isBlank()) return null
+        val hex = text.toIntOrNull(16)
+        if (hex != null && hex in 0..max) return hex
+        return text.toIntOrNull(10)?.takeIf { it in 0..max }
     }
 
     private fun normalizeBand(raw: String?, nr: Boolean): String? {

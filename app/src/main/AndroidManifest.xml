@@ -15,7 +15,7 @@
         android:usesCleartextTraffic="true">
 
         <activity
-            android:name=".ReferenceMainActivity"
+            android:name=".FinalMainActivity"
             android:exported="true"
             android:screenOrientation="unspecified">
             <intent-filter>
@@ -23,6 +23,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".ReferenceMainActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified" />
 
     </application>
 </manifest>
