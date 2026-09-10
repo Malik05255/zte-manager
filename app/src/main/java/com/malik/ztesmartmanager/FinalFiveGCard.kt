@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ import com.malik.ztesmartmanager.core.model.RouterCapabilities
 import com.malik.ztesmartmanager.core.model.RouterSnapshot
 import com.malik.ztesmartmanager.core.presentation.VerifiedFiveGMode
 import com.malik.ztesmartmanager.core.presentation.VerifiedFiveGPresenter
+import com.malik.ztesmartmanager.core.protocol.runtimeCapabilitiesFromSnapshot
 
 private val FiveGBg = Color(0xFFF7F2E9)
 private val FiveGDeep = Color(0xFF876126)
@@ -61,6 +63,11 @@ fun FinalFiveGPrimaryCard(
     modifier: Modifier = Modifier
 ) {
     val state = VerifiedFiveGPresenter.from(snapshot)
+    val runtime = remember(snapshot.raw, capabilities) {
+        runtimeCapabilitiesFromSnapshot(capabilities, snapshot.raw)
+    }
+    val nrControl = runtime.nrBandControl
+    val nrCanApply = capabilities.supportsNrBandLock && nrControl.canAttemptWrite
     var expanded by rememberSaveable { mutableStateOf(false) }
     val shape = RoundedCornerShape(topStart = 26.dp, topEnd = 54.dp, bottomEnd = 34.dp, bottomStart = 54.dp)
 
@@ -166,13 +173,17 @@ fun FinalFiveGPrimaryCard(
                     Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(50))
-                        .border(1.dp, if (state.verified) FiveGGood else FiveGLine, RoundedCornerShape(50))
+                        .border(1.dp, if (nrCanApply) FiveGGood else FiveGLine, RoundedCornerShape(50))
                         .padding(vertical = 7.dp, horizontal = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        if (state.verified) "الحالة الحية مؤكدة" else "الاتصال الحي غير مؤكد",
-                        color = if (state.verified) FiveGGood else FiveGMuted,
+                        when {
+                            nrCanApply -> "تحكم 5G جاهز للتحقق"
+                            state.verified -> "5G حي • التحكم قراءة فقط"
+                            else -> "الاتصال/التحكم غير مؤكد"
+                        },
+                        color = if (nrCanApply) FiveGGood else FiveGMuted,
                         fontSize = 7.sp,
                         fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
@@ -199,6 +210,25 @@ fun FinalFiveGPrimaryCard(
                 )
                 Spacer(Modifier.size(6.dp))
 
+                if (!nrCanApply) {
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(FiveGWarn.copy(alpha = 0.08f))
+                            .border(1.dp, FiveGWarn.copy(alpha = 0.25f), RoundedCornerShape(16.dp))
+                            .padding(9.dp)
+                    ) {
+                        Text(
+                            "التحكم بالكتابة موقوف لهذا الـFirmware الآن: ${nrControl.reason}",
+                            color = FiveGWarn,
+                            fontSize = 7.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Spacer(Modifier.size(6.dp))
+                }
+
                 if (capabilities.supportedNrBands.isEmpty()) {
                     Text("لا توجد قائمة NR موثّقة لهذا Profile.", color = FiveGWarn, fontSize = 8.sp)
                 } else {
@@ -222,14 +252,19 @@ fun FinalFiveGPrimaryCard(
                     Spacer(Modifier.size(6.dp))
                     Button(
                         onClick = onApplyNr,
-                        enabled = selectedNr.isNotEmpty() && !busy,
+                        enabled = selectedNr.isNotEmpty() && !busy && nrCanApply,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(50),
                         colors = ButtonDefaults.buttonColors(containerColor = FiveGDeep)
                     ) {
                         Text(
-                            if (busy) "جاري التطبيق والتحقق..." else "تطبيق إعداد 5G والتحقق بالـ read-back",
-                            fontSize = 8.sp
+                            when {
+                                busy -> "جاري التطبيق والتحقق..."
+                                nrCanApply -> "تطبيق إعداد 5G والتحقق بالـ read-back"
+                                else -> "الكتابة موقوفة حتى يثبت الـFirmware مسار rollback/read-back"
+                            },
+                            fontSize = 8.sp,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
