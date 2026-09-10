@@ -315,17 +315,29 @@ class ZteRouterClient(routerAddress: String) {
         )
         if (!commandAccepted(raw)) return OperationResult(false, false, "رفض الراوتر وضع الشبكة", raw)
 
-        delay(600)
-        val readBack = readRaw(setOf("BearerPreference"))
-        val actual = exactValue(readBack, "BearerPreference")?.trim()
-        val verified = actual != null && actual.equals(mode.trim(), ignoreCase = true)
+        var lastActual: String? = null
+        repeat(NETWORK_MODE_VERIFY_ATTEMPTS) { attempt ->
+            delay(if (attempt == 0) 700 else 500)
+            val readBack = runCatching { readRaw(setOf("BearerPreference")) }.getOrNull()
+            val actual = readBack?.let { exactValue(it, "BearerPreference")?.trim() }
+            if (actual != null) lastActual = actual
+            if (NetworkModeReadBackVerifier.matches(mode, actual)) {
+                return OperationResult(
+                    success = true,
+                    verified = true,
+                    message = "تم تطبيق وضع الشبكة والتحقق من BearerPreference",
+                    rawResult = raw
+                )
+            }
+        }
+
         return OperationResult(
-            success = if (actual == null) true else verified,
-            verified = verified,
-            message = when {
-                verified -> "تم تطبيق وضع الشبكة والتحقق منه"
-                actual == null -> "قبل الراوتر وضع الشبكة لكن الـFirmware لا يعرض BearerPreference للتحقق"
-                else -> "قبل الراوتر الأمر لكن BearerPreference لا يطابق القيمة المطلوبة"
+            success = false,
+            verified = false,
+            message = if (lastActual == null) {
+                "قبل الراوتر أمر وضع الشبكة، لكن لم نحصل على BearerPreference مطابق بعد عدة قراءات؛ لن تعتبر العملية ناجحة"
+            } else {
+                "قبل الراوتر الأمر لكن آخر BearerPreference مقروء ($lastActual) لا يطابق الوضع المطلوب؛ لن تعتبر العملية ناجحة"
             },
             rawResult = raw
         )
@@ -413,6 +425,7 @@ class ZteRouterClient(routerAddress: String) {
         private const val GET_PATH = "/goform/goform_get_cmd_process"
         private const val SET_PATH = "/goform/goform_set_cmd_process"
         private const val NR_CONFLICT = "__NR_SA_NSA_CONFLICT__"
+        private const val NETWORK_MODE_VERIFY_ATTEMPTS = 3
 
         private val IDENTITY_FIELDS = linkedSetOf(
             "device_name", "model_name", "product_name",
