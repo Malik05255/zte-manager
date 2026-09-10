@@ -115,7 +115,7 @@ object TowerRecommendationEngine {
             scoreAdvantage = currentScore?.let { bestScore - it },
             reason = buildString {
                 append("مرشح موثوق: ظهر ${best.samplesSeen}/${best.samplesTotal} مرات")
-                best.evidenceScore?.let { append(" • دليل $it/100") }
+                append(" • دليل $bestScore/100")
                 currentScore?.let { append(" • أفضل من الحالية بـ ${bestScore - it} نقاط") }
             }
         )

@@ -111,7 +111,7 @@ fun PremiumLoginScreen(
     ) {
         PremiumCard(modifier = Modifier.fillMaxWidth().widthIn(max = 480.dp)) {
             Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("ZTE Smart Manager", fontSize = 27.sp, fontWeight = FontWeight.Bold, color = PremiumInk)
+                Text("ZTE Smart HAI", fontSize = 27.sp, fontWeight = FontWeight.Bold, color = PremiumInk)
                 Text("لوحة التحكم الشبكية", fontSize = 18.sp, color = PremiumGoldDark)
                 Spacer(Modifier.height(26.dp))
                 OutlinedTextField(
