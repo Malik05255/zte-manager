@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -80,6 +79,7 @@ fun ZteRouterLoginScreen(
     onPasswordChange: (String) -> Unit,
     rememberPassword: Boolean,
     onRememberPasswordChange: (Boolean) -> Unit,
+    autoDetectGateway: Boolean,
     status: String,
     busy: Boolean,
     onConnect: () -> Unit
@@ -90,11 +90,10 @@ fun ZteRouterLoginScreen(
     var credentialSaveFailed by remember { mutableStateOf(false) }
     val isError = status.startsWith("تعذر") || status.contains("رفض") || status.contains("خطأ")
 
-    // Adopt the active Wi-Fi gateway only while the login form is still untouched and no saved
-    // credential has been loaded. Including the credential state in the effect keys cancels an
-    // in-flight detection if restored credentials arrive first, preventing a gateway race.
-    LaunchedEffect(routerAddress, password, rememberPassword, userEditedAddress) {
-        if (userEditedAddress || rememberPassword || password.isNotBlank()) return@LaunchedEffect
+    // Start only after the parent has confirmed that there is no stored router credential. User
+    // typing does not cancel detection; only manually editing the router address prevents overwrite.
+    LaunchedEffect(autoDetectGateway, userEditedAddress) {
+        if (!autoDetectGateway || userEditedAddress) return@LaunchedEffect
         val detected = withContext(Dispatchers.IO) { AndroidRouterGatewayDetector.detect(context) }
         if (RouterLoginGatewayPolicy.shouldAdoptDetectedGateway(
                 currentAddress = routerAddress,
