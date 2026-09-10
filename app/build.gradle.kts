@@ -25,6 +25,7 @@ android {
         minSdk = 26
         targetSdk = 36
         // Every CI artifact gets a higher code so Android/HONOR can treat it as an upgrade.
+        // UI sizing is runtime-adaptive; Honor 200 is handled by the tall-display dashboard policy.
         versionCode = ciVersionCode ?: 36
         versionName = ciVersionName ?: "0.5.8"
     }
