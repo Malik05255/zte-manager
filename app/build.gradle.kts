@@ -41,6 +41,7 @@ dependencies {
     implementation(libs.androidx.compose.material3)
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20260814")
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
