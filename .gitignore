@@ -1,0 +1,12 @@
+# Android signing material must never be committed
+*.jks
+*.keystore
+*.p12
+*.pk8
+*.pem
+signing/
+
+# Local Android/Gradle files
+.gradle/
+**/build/
+local.properties
