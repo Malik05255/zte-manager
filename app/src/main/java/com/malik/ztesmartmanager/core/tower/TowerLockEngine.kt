@@ -38,14 +38,14 @@ data class NearbyCell(
     val rsrp: Double?,
     val rsrq: Double?,
     val sinr: Double?,
-    val cellId: Long? = null,
-    val areaCode: Int? = null,
     val samplesSeen: Int = 1,
     val samplesTotal: Int = 1,
     val presencePercent: Int = 100,
     val stabilityScore: Int? = null,
     val evidenceScore: Int? = null,
-    val confidence: CellConfidence? = null
+    val confidence: CellConfidence? = null,
+    val cellId: Long? = null,
+    val areaCode: Int? = null
 )
 
 /**
