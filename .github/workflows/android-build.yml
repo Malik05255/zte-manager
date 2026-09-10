@@ -1,4 +1,4 @@
-name: Tower Map Source Fix
+name: Tower Map Compatibility Fix
 
 on:
   push:
@@ -19,21 +19,43 @@ jobs:
           ref: feature/connect-performance-credentials-0.5.7
           fetch-depth: 0
 
-      - name: Fix generated source and push
+      - name: Preserve NearbyCell positional API and push
         shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('app/src/main/java/com/malik/ztesmartmanager/TowerMapPanel.kt')
+          p = Path('app/src/main/java/com/malik/ztesmartmanager/core/tower/TowerLockEngine.kt')
           text = p.read_text(encoding='utf-8')
-          if text.startswith('\\\n'):
-              p.write_text(text[2:], encoding='utf-8')
+          old = '''    val sinr: Double?,
+    val cellId: Long? = null,
+    val areaCode: Int? = null,
+    val samplesSeen: Int = 1,
+    val samplesTotal: Int = 1,
+    val presencePercent: Int = 100,
+    val stabilityScore: Int? = null,
+    val evidenceScore: Int? = null,
+    val confidence: CellConfidence? = null
+'''
+          new = '''    val sinr: Double?,
+    val samplesSeen: Int = 1,
+    val samplesTotal: Int = 1,
+    val presencePercent: Int = 100,
+    val stabilityScore: Int? = null,
+    val evidenceScore: Int? = null,
+    val confidence: CellConfidence? = null,
+    val cellId: Long? = null,
+    val areaCode: Int? = null
+'''
+          if old in text:
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+          elif new not in text:
+              raise SystemExit('NearbyCell block not found')
           PY
           git config user.name "Malik05255"
           git config user.email "mmbbrr99@gmail.com"
-          git add app/src/main/java/com/malik/ztesmartmanager/TowerMapPanel.kt
+          git add app/src/main/java/com/malik/ztesmartmanager/core/tower/TowerLockEngine.kt
           if ! git diff --cached --quiet; then
-            git commit -m "Fix generated tower map source"
+            git commit -m "Preserve NearbyCell positional compatibility"
             git push origin HEAD:feature/connect-performance-credentials-0.5.7
           fi
 
