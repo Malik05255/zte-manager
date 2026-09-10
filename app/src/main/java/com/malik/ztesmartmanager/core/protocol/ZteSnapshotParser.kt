@@ -21,7 +21,12 @@ object ZteSnapshotParser {
         val lteRssi = firstSignal(raw, -160.0, -20.0, "lte_rssi", "rssi")
         val lteSinr = firstSignal(raw, -30.0, 60.0, "lte_snr")
 
-        val primaryCell = if (lteBand != null || ltePci != null || lteArfcn != null) {
+        val lteStateExplicit = radioState == RadioState.LTE_ONLY ||
+            radioState == RadioState.NSA_ACTIVE || radioState == RadioState.NSA_STANDBY
+        val lteLiveCarrierEvidence = ltePci != null && lteArfcn != null && lteRsrp != null
+        val lteVerifiedActive = lteStateExplicit && lteLiveCarrierEvidence
+
+        val primaryCell = if (lteLiveCarrierEvidence || lteBand != null) {
             CarrierCell(
                 role = CellRole.PRIMARY,
                 band = lteBand,
@@ -53,18 +58,18 @@ object ZteSnapshotParser {
             primaryCell?.let { primary -> sameLteCarrier(primary, secondary) } == true
         }
 
-        // wan_lte_ca is the authoritative live CA state on MC801A-class firmware.
-        // SCell info can remain cached after CA is released, so it must not override
-        // an explicit ca_deactivated value.
+        // VERIFIED-ONLY CA policy:
+        // Secondary-cell strings can be cached after CA is released. They are display evidence only.
+        // We declare CA active only when an explicit live activation flag says so.
         val rawCaState = firstNonBlank(raw, "wan_lte_ca", "Lte_ca_status")
         val explicitCaActive = isCaActivated(rawCaState)
         val explicitCaInactive = isCaDeactivated(rawCaState)
-        val perScellActive = isPositiveFlag(raw["lte_ca_scell_ca_activated"])
+        val scellActivationFlag = parseBooleanFlag(raw["lte_ca_scell_ca_activated"])
+        val caVerified = explicitCaActive || explicitCaInactive || scellActivationFlag != null
         val caActive = when {
             explicitCaActive -> true
             explicitCaInactive -> false
-            perScellActive -> true
-            rawCaState == null -> nonDuplicateSecondaryCells.isNotEmpty()
+            scellActivationFlag != null -> scellActivationFlag
             else -> false
         }
         val secondaryCells = if (caActive) nonDuplicateSecondaryCells else emptyList()
@@ -82,29 +87,26 @@ object ZteSnapshotParser {
         val rawNrRsrp = firstSignal(raw, -170.0, -35.0, "Z5g_rsrp", "nr5g_rsrp", "5g_rx0_rsrp", "5g_rx1_rsrp")
         val rawNrSinr = firstNrSinr(raw, "Z5g_SINR", "Z5g_snr", "nr5g_sinr", "nr5g_snr")
 
-        val structuralNrEvidence = rawNrBand != null &&
-            (rawNrArfcn != null || rawNrPci != null || rawNrCellId != null)
-        val signalNrEvidence = rawNrRsrp != null && (rawNrBand != null || rawNrArfcn != null || rawNrPci != null)
-        val strongNrEvidence = structuralNrEvidence || signalNrEvidence
+        val explicitNrActiveState = radioState == RadioState.NSA_ACTIVE ||
+            radioState == RadioState.SA_ACTIVE || radioState == RadioState.FIVE_G_ACTIVE
+        val nrStructuralEvidence = rawNrBand != null && rawNrArfcn != null && rawNrPci != null
+        val nrSignalEvidence = rawNrRsrp != null
+        val nrLiveCarrierEvidence = nrStructuralEvidence && nrSignalEvidence
 
-        // MC801A semantics from field-tested ZTE tooling:
-        // ENDC / EN-DC => NSA with NR carrier active.
-        // LTE-NSA     => NSA-capable/armed, but NR carrier is NOT active right now.
-        // The API can retain stale NR values, therefore LTE-NSA must win over them.
-        val nrActive = when (radioState) {
-            RadioState.NSA_ACTIVE, RadioState.SA_ACTIVE, RadioState.FIVE_G_ACTIVE -> true
-            RadioState.NSA_STANDBY, RadioState.LTE_ONLY -> false
-            RadioState.UNKNOWN -> strongNrEvidence
-        }
+        // VERIFIED-ONLY NR policy:
+        // Never infer 5G from stale NR fields. Both an explicit live RAT state and a complete current
+        // NR carrier signature (band + ARFCN + PCI + RSRP) are required before the UI may say 5G.
+        val nrVerifiedActive = explicitNrActiveState && nrLiveCarrierEvidence
+        val nrActive = nrVerifiedActive
 
-        val nrBand = rawNrBand.takeIf { nrActive }
-        val nrArfcn = rawNrArfcn.takeIf { nrActive }
-        val nrPci = rawNrPci.takeIf { nrActive }
-        val nrRsrp = rawNrRsrp.takeIf { nrActive }
-        val nrSinr = rawNrSinr.takeIf { nrActive }
+        val nrBand = rawNrBand.takeIf { nrVerifiedActive }
+        val nrArfcn = rawNrArfcn.takeIf { nrVerifiedActive }
+        val nrPci = rawNrPci.takeIf { nrVerifiedActive }
+        val nrRsrp = rawNrRsrp.takeIf { nrVerifiedActive }
+        val nrSinr = rawNrSinr.takeIf { nrVerifiedActive }
 
         val nrCells = buildList {
-            if (nrActive && (nrBand != null || nrPci != null || nrArfcn != null || nrRsrp != null)) {
+            if (nrVerifiedActive) {
                 add(
                     CarrierCell(
                         role = CellRole.NR,
@@ -114,41 +116,40 @@ object ZteSnapshotParser {
                         bandwidthMhz = parseNumber(raw["nr_ca_pcell_bandwidth"])
                     )
                 )
+                addAll(parseNrSecondaryCells(raw["nr_multi_ca_scell_info"]))
             }
-            if (nrActive) addAll(parseNrSecondaryCells(raw["nr_multi_ca_scell_info"]))
         }.distinctBy { Triple(it.band, it.pci, it.arfcn) }
 
-        val ltePresent = primaryCell != null || lteRsrp != null ||
-            radioState == RadioState.LTE_ONLY || radioState == RadioState.NSA_ACTIVE || radioState == RadioState.NSA_STANDBY
-
-        val radioMode = when (radioState) {
-            RadioState.NSA_ACTIVE -> "NSA_ACTIVE"
-            RadioState.NSA_STANDBY -> "NSA_STANDBY"
-            RadioState.SA_ACTIVE -> "SA_ACTIVE"
-            RadioState.FIVE_G_ACTIVE -> "5G_ACTIVE"
-            RadioState.LTE_ONLY -> "LTE_ONLY"
-            RadioState.UNKNOWN -> if (nrActive) "5G_ACTIVE_INFERRED" else "UNKNOWN"
+        val verifiedNetworkType = when {
+            nrVerifiedActive && radioState == RadioState.NSA_ACTIVE && lteVerifiedActive -> "5G NSA / 4G"
+            nrVerifiedActive && radioState == RadioState.SA_ACTIVE -> "5G SA"
+            nrVerifiedActive -> "5G"
+            lteVerifiedActive -> if (caVerified && caActive) "4G+" else "4G"
+            else -> "غير مؤكد"
         }
 
-        val interpretedNetworkType = when (radioState) {
-            RadioState.NSA_ACTIVE -> "5G NSA • NR نشط"
-            RadioState.NSA_STANDBY -> "5G NSA • NR غير نشط الآن"
-            RadioState.SA_ACTIVE -> "5G SA"
-            RadioState.FIVE_G_ACTIVE -> rawNetworkType ?: "5G"
-            RadioState.LTE_ONLY -> rawNetworkType ?: "LTE"
-            RadioState.UNKNOWN -> when {
-                nrActive && ltePresent -> "5G + 4G"
-                nrActive -> "5G"
-                else -> rawNetworkType
-            }
+        val radioMode = when {
+            nrVerifiedActive && radioState == RadioState.NSA_ACTIVE -> "NSA_ACTIVE_VERIFIED"
+            nrVerifiedActive && radioState == RadioState.SA_ACTIVE -> "SA_ACTIVE_VERIFIED"
+            nrVerifiedActive -> "5G_ACTIVE_VERIFIED"
+            lteVerifiedActive -> "LTE_ACTIVE_VERIFIED"
+            explicitNrActiveState -> "NR_STATE_UNVERIFIED"
+            radioState == RadioState.NSA_STANDBY -> "NSA_STANDBY"
+            else -> "UNKNOWN"
         }
 
-        raw["_zte_interpreted_network_type"] = interpretedNetworkType.orEmpty()
+        raw["_zte_interpreted_network_type"] = verifiedNetworkType
+        raw["_zte_verified_network_type"] = verifiedNetworkType
         raw["_zte_radio_mode"] = radioMode
+        raw["_zte_lte_active_verified"] = lteVerifiedActive.toString()
         raw["_zte_nr_active"] = nrActive.toString()
-        raw["_zte_nr_structural_evidence"] = structuralNrEvidence.toString()
-        raw["_zte_nr_signal_evidence"] = signalNrEvidence.toString()
+        raw["_zte_nr_active_verified"] = nrVerifiedActive.toString()
+        raw["_zte_nr_explicit_state"] = explicitNrActiveState.toString()
+        raw["_zte_nr_structural_evidence"] = nrStructuralEvidence.toString()
+        raw["_zte_nr_signal_evidence"] = nrSignalEvidence.toString()
+        raw["_zte_nr_cell_id_evidence"] = (rawNrCellId != null).toString()
         raw["_zte_ca_active"] = caActive.toString()
+        raw["_zte_ca_verified"] = caVerified.toString()
         raw["_zte_ca_state_raw"] = rawCaState.orEmpty()
         raw["_zte_raw_network_type"] = rawNetworkType.orEmpty()
         raw["_zte_secondary_cells_raw_count"] = parsedSecondaryCells.size.toString()
@@ -161,23 +162,23 @@ object ZteSnapshotParser {
             model = firstNonBlank(raw, "device_name", "model_name", "product_name"),
             firmware = firstNonBlank(raw, "wa_inner_version", "web_version", "cr_version"),
             hardwareVersion = firstNonBlank(raw, "hardware_version"),
-            networkType = interpretedNetworkType,
+            networkType = verifiedNetworkType,
             operatorCode = (mcc + mnc).takeUnless { it.isBlank() },
-            lteRsrp = lteRsrp,
-            lteRsrq = lteRsrq,
-            lteRssi = lteRssi,
-            lteSinr = lteSinr,
+            lteRsrp = lteRsrp.takeIf { lteVerifiedActive },
+            lteRsrq = lteRsrq.takeIf { lteVerifiedActive },
+            lteRssi = lteRssi.takeIf { lteVerifiedActive },
+            lteSinr = lteSinr.takeIf { lteVerifiedActive },
             nrRsrp = nrRsrp,
             nrSinr = nrSinr,
-            lteBand = lteBand,
+            lteBand = lteBand.takeIf { lteVerifiedActive },
             nrBand = nrBand,
-            pci = ltePci,
-            earfcn = lteArfcn,
-            cellId = parseZteHexLong(raw["cell_id"]),
-            caActive = caActive,
+            pci = ltePci.takeIf { lteVerifiedActive },
+            earfcn = lteArfcn.takeIf { lteVerifiedActive },
+            cellId = parseZteHexLong(raw["cell_id"]).takeIf { lteVerifiedActive },
+            caActive = caVerified && caActive,
             cells = buildList {
-                primaryCell?.let(::add)
-                addAll(secondaryCells)
+                if (lteVerifiedActive) primaryCell?.let(::add)
+                if (caVerified && caActive) addAll(secondaryCells)
                 addAll(nrCells)
             },
             modem4gTemperature = parseNumber(raw["pm_sensor_mdm"]),
@@ -294,9 +295,13 @@ object ZteSnapshotParser {
         return null
     }
 
-    private fun isPositiveFlag(value: String?): Boolean {
+    private fun parseBooleanFlag(value: String?): Boolean? {
         val normalized = value?.trim()?.lowercase().orEmpty()
-        return normalized in setOf("1", "true", "yes", "on", "active", "activated", "ca_activated")
+        return when (normalized) {
+            "1", "true", "yes", "on", "active", "activated", "ca_activated" -> true
+            "0", "false", "no", "off", "inactive", "deactivated", "ca_deactivated" -> false
+            else -> null
+        }
     }
 
     private fun isCaActivated(value: String?): Boolean {
