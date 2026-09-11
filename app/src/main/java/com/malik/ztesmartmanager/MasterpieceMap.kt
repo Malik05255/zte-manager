@@ -10,6 +10,7 @@ import android.os.Bundle
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +34,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import org.maplibre.android.MapLibre
@@ -47,8 +51,7 @@ private const val OPEN_FREE_MAP_STYLE = "https://tiles.openfreemap.org/styles/li
 
 /**
  * Real interactive vector map backed by OpenFreeMap/OpenStreetMap through MapLibre Native.
- * We never invent a tower coordinate. Only a verified device location is placed on the map here;
- * tower coordinates can be added later only when a provider returns a verifiable location.
+ * We never invent a tower coordinate. Only verified coordinates are ever drawn as tower markers.
  */
 @Composable
 internal fun RealNetworkMap(
@@ -121,6 +124,9 @@ internal fun RealNetworkMap(
         }
     }
 
+    val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
     Box(modifier.clip(RoundedCornerShape(24.dp)).background(Color(0xFFEAF1F7))) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
@@ -131,93 +137,34 @@ internal fun RealNetworkMap(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.size(8.dp).clip(CircleShape).background(HaiGreen))
                 Spacer(Modifier.size(6.dp))
-                Text("خريطة مباشرة", color = HaiInk, fontWeight = androidx.compose.ui.text.font.FontWeight.Black)
+                Text("خريطة مباشرة", color = HaiInk, fontWeight = FontWeight.Black)
             }
-            Text("OpenStreetMap / OpenFreeMap", color = HaiMuted, fontSize = androidx.compose.ui.unit.sp(9))
+            Text("OpenStreetMap / OpenFreeMap", color = HaiMuted, fontSize = 9.sp)
         }
 
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp)
                 .clip(RoundedCornerShape(17.dp)).background(Color.White.copy(alpha = .96f)).padding(10.dp)
         ) {
-            Text(locationMessage, color = HaiInk, fontSize = androidx.compose.ui.unit.sp(10), lineHeight = androidx.compose.ui.unit.sp(14))
+            Text(locationMessage, color = HaiInk, fontSize = 10.sp, lineHeight = 14.sp)
             Spacer(Modifier.height(8.dp))
             Box(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(HaiBlue)
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-                Text(
-                    if (hasPermission) "◎ حدّد موقعي" else "◎ السماح بالموقع",
-                    color = Color.White,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(10.dp))
-                        .padding(horizontal = 20.dp, vertical = 2.dp)
-                        .then(
-                            Modifier
-                        )
-                )
-                // Whole button remains clickable using the transparent overlay below.
-                Box(
-                    Modifier.matchParentSize().clip(RoundedCornerShape(13.dp)).background(Color.Transparent)
-                        .then(
-                            Modifier
-                        )
-                )
-            }
-        }
-
-        // Explicit click target kept separate so map gestures remain unaffected outside the button.
-        val hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
-        Box(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 20.dp, vertical = 20.dp)
-                .height(42.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .background(Color.Transparent)
-                .then(
-                    androidx.compose.ui.Modifier
-                )
-        )
-        // Request action is exposed by the compact floating button to avoid consuming map drags.
-        Box(
-            Modifier.align(Alignment.CenterEnd).padding(12.dp).size(48.dp).clip(CircleShape).background(Color.White)
-                .then(
-                    Modifier
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "◎",
-                color = HaiBlue,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
-                fontSize = androidx.compose.ui.unit.sp(22),
-                modifier = Modifier
-                    .clip(CircleShape)
-                    .padding(12.dp)
-                    .then(
-                        Modifier
-                    )
-            )
-        }
-
-        // Compose's clickable is applied last to the floating location control.
-        Box(
-            Modifier.align(Alignment.CenterEnd).padding(12.dp).size(48.dp).clip(CircleShape)
-                .background(Color.Transparent)
-                .then(
-                    Modifier
-                )
-                .run {
-                    androidx.compose.foundation.clickable {
+                    .clickable {
                         if (hasPermission) moveToKnownLocation()
                         else launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
-                }
-        )
+                    .padding(vertical = 10.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    if (hasPermission) "◎ حدّد موقعي" else "◎ السماح بالموقع",
+                    color = Color.White,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp
+                )
+            }
+        }
     }
 }
 
