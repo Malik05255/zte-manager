@@ -62,7 +62,7 @@ private data class V5RadioState(
 )
 
 @Composable
-fun HaiHomeDashboardV5(
+fun HaiHomeDashboardV5Legacy(
     snapshot: RouterSnapshot,
     telemetrySamples: List<SafeTelemetrySample>,
     status: String,
