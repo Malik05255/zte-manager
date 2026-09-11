@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ArabicHaiDashboardV5.kt").readText()
+        val dashboard = source("MasterpieceDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,12 +22,14 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة V5 العربية الجديدة",
-            runtime.contains("ArabicHaiDashboardV5(")
+            "غلاف الأمان يجب أن يستخدم واجهة Masterpiece الجديدة",
+            runtime.contains("MasterpieceDashboard(")
         )
         assertFalse(
             "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
-            runtime.contains("ArabicHaiDashboardV4(") ||
+            runtime.contains("ArabicHaiDashboardV6(") ||
+                runtime.contains("ArabicHaiDashboardV5(") ||
+                runtime.contains("ArabicHaiDashboardV4(") ||
                 runtime.contains("ArabicHaiDashboardV3(") ||
                 runtime.contains("ArabicHaiDashboardV2(") ||
                 runtime.contains("ArabicHaiDashboard(") ||
@@ -64,6 +66,7 @@ class ArabicUiPolicyTest {
         assertTrue(isArabicOrTechnicalOnly("5G NSA"))
         assertTrue(isArabicOrTechnicalOnly("RSRP"))
         assertTrue(isArabicOrTechnicalOnly("ZTE Smart HAI"))
+        assertTrue(isArabicOrTechnicalOnly("MapLibre"))
         assertFalse(isArabicOrTechnicalOnly("Speed Test"))
         assertFalse(isArabicOrTechnicalOnly("Network Stat"))
     }
@@ -97,7 +100,8 @@ class ArabicUiPolicyTest {
         )
 
         private val TECHNICAL_TOKENS = listOf(
-            "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
+            "ZTE Smart HAI", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
+            "HAI", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
             "STC", "Mobily", "Zain"
         )
@@ -107,6 +111,9 @@ class ArabicUiPolicyTest {
             "ArabicHaiDashboardV2.kt",
             "ArabicHaiDashboardV3.kt",
             "ArabicHaiDashboardV4.kt",
+            "ArabicHaiDashboardV5.kt",
+            "ArabicHaiDashboardV6.kt",
+            "ArabicHaiDashboardV6Pages.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
