@@ -55,27 +55,21 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun homeRows_useReferenceHeightsInsteadOfStretchingWithPhoneHeight() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/TargetHomeDashboard.kt").readText()
-        val design = File("src/main/java/com/malik/ztesmartmanager/HaiReferenceDesign.kt").readText()
+    fun rebuiltHomeV4_isTheProductionHomeAndUsesFixedReferenceRows() {
+        val entry = File("src/main/java/com/malik/ztesmartmanager/TargetHomeDashboard.kt").readText()
+        val home = File("src/main/java/com/malik/ztesmartmanager/HaiHomeDashboardV4.kt").readText()
 
-        assertTrue(source.contains("verticalScroll(rememberScrollState())"))
-        assertTrue(source.contains("height(D.HeroHeight)"))
-        assertTrue(source.contains("height(D.MetricHeight)"))
-        assertTrue(source.contains("height(D.MiddleRowHeight)"))
-        assertTrue(source.contains("height(D.TowerRowHeight)"))
-        assertTrue(source.contains("height(D.BottomRowHeight)"))
-
-        assertTrue(design.contains("val HeroHeight: Dp = 160.dp"))
-        assertTrue(design.contains("val MetricHeight: Dp = 58.dp"))
-        assertTrue(design.contains("val MiddleRowHeight: Dp = 136.dp"))
-        assertTrue(design.contains("val TowerRowHeight: Dp = 118.dp"))
-        assertTrue(design.contains("val BottomRowHeight: Dp = 94.dp"))
-
-        assertTrue(!source.contains("weight(151f)"))
-        assertTrue(!source.contains("weight(131f)"))
-        assertTrue(!source.contains("weight(118f)"))
-        assertTrue(!source.contains("weight(92f)"))
+        assertTrue(entry.contains("HaiHomeDashboardV4("))
+        assertTrue(home.contains("verticalScroll(rememberScrollState())"))
+        assertTrue(home.contains("height(176.dp)"))
+        assertTrue(home.contains("height(64.dp)"))
+        assertTrue(home.contains("height(160.dp)"))
+        assertTrue(home.contains("height(134.dp)"))
+        assertTrue(home.contains("height(112.dp)"))
+        assertTrue(home.contains("H4Gauge("))
+        assertTrue(home.contains("H4MiniMap("))
+        assertTrue(home.contains("H4Bands("))
+        assertTrue(home.contains("H4Tools("))
     }
 
     @Test
