@@ -9,7 +9,9 @@ class MobileUiV2ReadabilityTest {
     @Test
     fun productionDashboard_neverUsesTinyText() {
         val root = File("src/main/java/com/malik/ztesmartmanager")
-        val files = root.listFiles()?.filter { it.name.startsWith("ZteManager") && it.extension == "kt" }.orEmpty()
+        val files = root.listFiles()?.filter {
+            it.extension == "kt" && (it.name.startsWith("ZteManager") || it.name == "ZteRouterLoginScreen.kt")
+        }.orEmpty()
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
         val tooTiny = files.flatMap { source ->
             regex.findAll(source.readText())
