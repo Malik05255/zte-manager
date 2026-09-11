@@ -133,7 +133,7 @@ fun RuntimeAwareFinalDashboard(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
 
-    MasterpieceDashboard(
+    ReferenceExactDashboard(
         snapshot = snapshot,
         capabilities = effectiveCapabilities,
         runtime = runtime,
