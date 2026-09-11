@@ -24,43 +24,45 @@ import com.malik.ztesmartmanager.core.smart.PlacementGuidance
 import com.malik.ztesmartmanager.core.smart.PlacementReading
 import kotlin.math.roundToInt
 
-internal val ZteBg = Color(0xFFF4F8FF)
+internal val ZteBg = Color(0xFFF5F8FC)
 internal val ZtePaper = Color(0xFFFFFFFF)
-internal val ZteInk = Color(0xFF102A56)
-internal val ZteMuted = Color(0xFF687EA8)
-internal val ZteLine = Color(0xFFDCE8F8)
-internal val ZteBlue = Color(0xFF0B7CFF)
-internal val ZteBlue2 = Color(0xFF2B9BFF)
-internal val ZteDeepBlue = Color(0xFF123A91)
-internal val ZteCyan = Color(0xFF19C5E8)
-internal val ZtePurple = Color(0xFF7958FF)
-internal val ZteGreen = Color(0xFF2DCA72)
-internal val ZteAmber = Color(0xFFFFB547)
-internal val ZteRed = Color(0xFFEB5E70)
-internal val ZteSoftBlue = Color(0xFFEAF4FF)
-internal val ZteSoftPurple = Color(0xFFF0EDFF)
-internal val ZteSoftGreen = Color(0xFFEAFBF2)
+internal val ZteInk = Color(0xFF10233F)
+internal val ZteMuted = Color(0xFF677892)
+internal val ZteLine = Color(0xFFE4EBF4)
+internal val ZteBlue = Color(0xFF1677FF)
+internal val ZteBlue2 = Color(0xFF50A6FF)
+internal val ZteDeepBlue = Color(0xFF0D3E88)
+internal val ZteCyan = Color(0xFF24B8C9)
+internal val ZtePurple = Color(0xFF7659E8)
+internal val ZteGreen = Color(0xFF24B66D)
+internal val ZteAmber = Color(0xFFE9A72F)
+internal val ZteRed = Color(0xFFE55768)
+internal val ZteSoftBlue = Color(0xFFEAF3FF)
+internal val ZteSoftPurple = Color(0xFFF1EEFF)
+internal val ZteSoftGreen = Color(0xFFEAF8F0)
+internal val ZteSoftAmber = Color(0xFFFFF6E5)
+internal val ZteSurfaceAlt = Color(0xFFF8FAFD)
 
 internal enum class ZteScreen { HOME, NETWORK, TOOLS, MORE }
 
 @Composable
 internal fun ZteCard(
     modifier: Modifier = Modifier,
-    contentPadding: PaddingValues = PaddingValues(16.dp),
+    contentPadding: PaddingValues = PaddingValues(18.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 8.dp,
-                shape = RoundedCornerShape(24.dp),
-                ambientColor = ZteBlue.copy(alpha = 0.08f),
-                spotColor = ZteBlue.copy(alpha = 0.08f)
+                elevation = 5.dp,
+                shape = RoundedCornerShape(28.dp),
+                ambientColor = Color.Black.copy(alpha = 0.035f),
+                spotColor = ZteBlue.copy(alpha = 0.035f)
             ),
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(28.dp),
         color = ZtePaper,
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.98f))
+        border = BorderStroke(1.dp, ZteLine.copy(alpha = 0.72f))
     ) {
         Column(Modifier.padding(contentPadding), content = content)
     }
@@ -73,26 +75,32 @@ internal fun ZteSectionHeader(
     action: String? = null,
     onAction: (() -> Unit)? = null
 ) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = ZteInk, fontSize = 17.sp, fontWeight = FontWeight.Black)
-            if (!subtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(3.dp))
-                Text(subtitle, color = ZteMuted, fontSize = 13.sp, lineHeight = 18.sp)
-            }
+    Column(Modifier.fillMaxWidth()) {
+        Text(
+            title,
+            color = ZteInk,
+            fontSize = 20.sp,
+            lineHeight = 26.sp,
+            fontWeight = FontWeight.Black
+        )
+        if (!subtitle.isNullOrBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(subtitle, color = ZteMuted, fontSize = 14.sp, lineHeight = 21.sp)
         }
         if (!action.isNullOrBlank() && onAction != null) {
+            Spacer(Modifier.height(10.dp))
             Surface(
-                modifier = Modifier.clickable(onClick = onAction),
-                shape = RoundedCornerShape(50),
+                modifier = Modifier.align(Alignment.Start).clickable(onClick = onAction),
+                shape = RoundedCornerShape(16.dp),
                 color = ZteSoftBlue
             ) {
                 Text(
                     action,
                     color = ZteBlue,
-                    fontSize = 13.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    maxLines = 1
                 )
             }
         }
@@ -104,14 +112,14 @@ internal fun ZtePrimaryButton(label: String, enabled: Boolean = true, onClick: (
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-        shape = RoundedCornerShape(17.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = RoundedCornerShape(18.dp),
         colors = ButtonDefaults.buttonColors(
             containerColor = ZteBlue,
-            disabledContainerColor = ZteBlue.copy(alpha = 0.35f)
+            disabledContainerColor = ZteBlue.copy(alpha = 0.30f)
         )
     ) {
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.Black)
+        Text(label, fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Black)
     }
 }
 
@@ -120,11 +128,11 @@ internal fun ZteSecondaryButton(label: String, enabled: Boolean = true, onClick:
     OutlinedButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
-        shape = RoundedCornerShape(17.dp),
+        modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+        shape = RoundedCornerShape(18.dp),
         border = BorderStroke(1.dp, ZteLine)
     ) {
-        Text(label, color = if (enabled) ZteInk else ZteMuted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = if (enabled) ZteInk else ZteMuted, fontSize = 15.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -137,16 +145,19 @@ internal fun ZteChoiceChip(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier.heightIn(min = 46.dp).clickable(enabled = enabled, onClick = onClick),
-        shape = RoundedCornerShape(15.dp),
-        color = if (selected) ZteBlue else Color(0xFFF5F8FD),
+        modifier = modifier
+            .heightIn(min = 54.dp)
+            .clickable(enabled = enabled, onClick = onClick),
+        shape = RoundedCornerShape(18.dp),
+        color = if (selected) ZteBlue else ZteSurfaceAlt,
         border = BorderStroke(1.dp, if (selected) ZteBlue else ZteLine)
     ) {
-        Box(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
             Text(
                 label,
                 color = if (selected) Color.White else ZteInk,
-                fontSize = 14.sp,
+                fontSize = 15.sp,
+                lineHeight = 20.sp,
                 fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
@@ -158,11 +169,24 @@ internal fun ZteChoiceChip(
 
 @Composable
 internal fun ZteStatusPill(label: String, good: Boolean) {
-    Surface(shape = RoundedCornerShape(50), color = if (good) ZteSoftGreen else Color(0xFFFFF3E5)) {
-        Row(Modifier.padding(horizontal = 12.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(9.dp).clip(CircleShape).background(if (good) ZteGreen else ZteAmber))
-            Spacer(Modifier.width(7.dp))
-            Text(label, color = ZteInk, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (good) ZteSoftGreen else ZteSoftAmber
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(if (good) ZteGreen else ZteAmber))
+            Spacer(Modifier.width(8.dp))
+            Text(
+                label,
+                color = ZteInk,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }
@@ -171,57 +195,53 @@ internal fun ZteStatusPill(label: String, good: Boolean) {
 internal fun ZteInfoTile(title: String, value: String, modifier: Modifier = Modifier) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(17.dp),
-        color = Color(0xFFF7FAFF),
+        shape = RoundedCornerShape(20.dp),
+        color = ZteSurfaceAlt,
         border = BorderStroke(1.dp, ZteLine)
     ) {
-        Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(title, color = ZteMuted, fontSize = 12.sp, textAlign = TextAlign.Center)
-            Spacer(Modifier.height(4.dp))
-            Text(value, color = ZteInk, fontSize = 14.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, maxLines = 2)
+        Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.Start) {
+            Text(title, color = ZteMuted, fontSize = 14.sp, lineHeight = 19.sp)
+            Spacer(Modifier.height(5.dp))
+            Text(value, color = ZteInk, fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.Black, maxLines = 2)
         }
     }
 }
 
 @Composable
 internal fun ZteTopBar(connected: Boolean, title: String) {
-    Surface(color = Color.Transparent) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Surface(color = ZteBg) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 18.dp, vertical = 10.dp)
         ) {
-            Surface(shape = CircleShape, color = ZteSoftBlue) {
-                Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
-                    Text("≡", color = ZteDeepBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, color = ZteInk, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                Text("تحكم أكبر… اتصال أقوى", color = ZteMuted, fontSize = 13.sp)
-            }
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = Color.White,
-                border = BorderStroke(1.dp, ZteLine),
-                shadowElevation = 4.dp
-            ) {
-                Row(Modifier.padding(horizontal = 13.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(12.dp).clip(CircleShape).background(if (connected) ZteBlue else ZteMuted))
-                    Spacer(Modifier.width(8.dp))
-                    Column {
-                        Text(if (connected) "متصل" else "غير متصل", color = ZteBlue, fontSize = 14.sp, fontWeight = FontWeight.Black)
-                        Text(if (connected) "الراوتر جاهز" else "بانتظار الراوتر", color = ZteMuted, fontSize = 12.sp)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Surface(shape = CircleShape, color = ZteSoftBlue) {
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        Text("≡", color = ZteDeepBlue, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                     }
                 }
+                Spacer(Modifier.width(13.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = ZteInk, fontSize = 24.sp, lineHeight = 29.sp, fontWeight = FontWeight.Black)
+                    Spacer(Modifier.height(2.dp))
+                    Text("واجهة واضحة بدون حشر أو نص صغير", color = ZteMuted, fontSize = 14.sp, lineHeight = 19.sp)
+                }
             }
+            Spacer(Modifier.height(10.dp))
+            ZteStatusPill(if (connected) "متصل — الراوتر جاهز" else "غير متصل", connected)
         }
     }
 }
 
 @Composable
 internal fun ZteBottomBar(current: ZteScreen, onNavigate: (ZteScreen) -> Unit) {
-    NavigationBar(containerColor = Color.White, tonalElevation = 10.dp) {
+    NavigationBar(
+        modifier = Modifier.navigationBarsPadding(),
+        containerColor = Color.White,
+        tonalElevation = 7.dp
+    ) {
         val items = listOf(
             Triple(ZteScreen.HOME, "⌂", "الرئيسية"),
             Triple(ZteScreen.NETWORK, "▥", "الشبكة"),
@@ -233,7 +253,14 @@ internal fun ZteBottomBar(current: ZteScreen, onNavigate: (ZteScreen) -> Unit) {
                 selected = current == screen,
                 onClick = { onNavigate(screen) },
                 icon = { Text(symbol, fontSize = 22.sp, fontWeight = FontWeight.Black) },
-                label = { Text(label, fontSize = 12.sp, fontWeight = if (current == screen) FontWeight.Black else FontWeight.Medium) },
+                label = {
+                    Text(
+                        label,
+                        fontSize = 13.sp,
+                        maxLines = 1,
+                        fontWeight = if (current == screen) FontWeight.Black else FontWeight.Medium
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = ZteBlue,
                     selectedTextColor = ZteBlue,
@@ -250,11 +277,11 @@ internal fun ZteBottomBar(current: ZteScreen, onNavigate: (ZteScreen) -> Unit) {
 internal fun ZteDisconnectedState(message: String) {
     Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
         ZteCard(Modifier.wrapContentHeight()) {
-            Box(Modifier.size(68.dp).clip(CircleShape).background(ZteSoftBlue), contentAlignment = Alignment.Center) {
-                Text("ZTE", color = ZteBlue, fontSize = 18.sp, fontWeight = FontWeight.Black)
+            Box(Modifier.size(76.dp).clip(CircleShape).background(ZteSoftBlue), contentAlignment = Alignment.Center) {
+                Text("ZTE", color = ZteBlue, fontSize = 20.sp, fontWeight = FontWeight.Black)
             }
-            Spacer(Modifier.height(14.dp))
-            Text(message, color = ZteInk, fontSize = 17.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+            Spacer(Modifier.height(16.dp))
+            Text(message, color = ZteInk, fontSize = 18.sp, lineHeight = 25.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
         }
     }
 }
@@ -335,8 +362,8 @@ internal fun ztePlacementWords(reading: PlacementReading?): Triple<String, Strin
         PlacementGuidance.CELL_CHANGED_WORSE -> Triple("الخلية تغيّرت للأسوأ", "انتقل الراوتر إلى خلية أضعف.", ZteRed)
         PlacementGuidance.WORSE -> Triple("النتيجة تراجعت", "ارجع خطوة للخلف.", ZteAmber)
         PlacementGuidance.STABLE -> Triple(
-            if (reading.score.total >= 82) "ممتاز — بقيت خطوة بسيطة" else "المكان ثابت",
-            if (reading.score.total >= 82) "يمكنك تثبيت الراوتر هنا." else "حرّكه قليلًا وقارن.",
+            if (reading.score.total >= 82) "ممتاز — ثبّت الراوتر هنا" else "المكان ثابت",
+            if (reading.score.total >= 82) "لا تحتاج لتحريكه أكثر الآن." else "حرّكه خطوة صغيرة وقارن النتيجة.",
             if (reading.score.total >= 82) ZteGreen else ZteBlue
         )
         PlacementGuidance.INITIAL -> Triple(zteQualityWord(reading.score.total), "هذه أول قراءة؛ حرّك الراوتر قليلًا للمقارنة.", zteQualityColor(reading.score.total))
@@ -366,4 +393,6 @@ internal fun zteActiveBands(snapshot: RouterSnapshot): List<String> {
 
 internal fun zteMetricValue(value: Double?, unit: String): String = value?.let { "${it.roundToInt()} $unit" } ?: "—"
 
-internal val ZteHeroBrush = Brush.linearGradient(listOf(Color(0xFFF7FBFF), Color(0xFFE5F3FF), Color(0xFFF9FCFF)))
+internal val ZteHeroBrush = Brush.linearGradient(
+    listOf(Color(0xFFF5FAFF), Color(0xFFE8F3FF), Color(0xFFF9FCFF))
+)
