@@ -9,7 +9,7 @@ class MobileUiV2ReadabilityTest {
     @Test
     fun productionDashboard_keepsMicroLabelsReadable() {
         val sources = listOf(
-            File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt"),
+            File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt"),
             File("src/main/java/com/malik/ztesmartmanager/MasterpieceWidgets.kt"),
             File("src/main/java/com/malik/ztesmartmanager/MasterpieceMap.kt")
         )
@@ -35,7 +35,7 @@ class MobileUiV2ReadabilityTest {
 
     @Test
     fun productionDashboard_usesAdaptiveLayoutAndMaterialTouchTargets() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt").readText()
+        val source = File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt").readText()
         assertTrue(source.contains("BoxWithConstraints"))
         assertTrue(source.contains("NavigationBar("))
         assertTrue(source.contains("Button("))
@@ -44,17 +44,17 @@ class MobileUiV2ReadabilityTest {
 
     @Test
     fun homeDashboard_isScrollableAndDoesNotForceEverythingIntoViewport() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt").readText()
-        assertTrue(source.contains("private fun MpHome"))
+        val source = File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt").readText()
+        assertTrue(source.contains("private fun ReferenceHome"))
         assertTrue(source.contains("LazyColumn("))
         assertTrue(source.contains("contentPadding = PaddingValues"))
         assertTrue(source.contains("verticalArrangement = Arrangement.spacedBy"))
     }
 
     @Test
-    fun productionRoute_usesMasterpieceOnly() {
+    fun productionRoute_usesReferenceExactDashboard() {
         val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
-        assertTrue(runtime.contains("MasterpieceDashboard("))
+        assertTrue(runtime.contains("ReferenceExactDashboard("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV6("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV5("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV4("))
@@ -64,8 +64,8 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun masterpieceDashboard_keepsTruthFirstLanguage() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt").readText()
+    fun productionDashboard_keepsTruthFirstLanguage() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt").readText()
         val required = listOf(
             "بدون تخمين",
             "لا نختلق إحداثيات",
