@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ArabicHaiDashboardV4.kt").readText()
+        val dashboard = source("ArabicHaiDashboardV5.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,12 +22,13 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة V4 العربية المعتمدة",
-            runtime.contains("ArabicHaiDashboardV4(")
+            "غلاف الأمان يجب أن يستخدم واجهة V5 العربية الجديدة",
+            runtime.contains("ArabicHaiDashboardV5(")
         )
         assertFalse(
             "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
-            runtime.contains("ArabicHaiDashboardV3(") ||
+            runtime.contains("ArabicHaiDashboardV4(") ||
+                runtime.contains("ArabicHaiDashboardV3(") ||
                 runtime.contains("ArabicHaiDashboardV2(") ||
                 runtime.contains("ArabicHaiDashboard(") ||
                 runtime.contains("HaiAdaptiveDashboard(")
@@ -96,14 +97,16 @@ class ArabicUiPolicyTest {
         )
 
         private val TECHNICAL_TOKENS = listOf(
-            "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "LTE", "NR", "NSA", "SA", "STC", "CA",
-            "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms"
+            "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
+            "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
+            "STC", "Mobily", "Zain"
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
             "ArabicHaiDashboard.kt",
             "ArabicHaiDashboardV2.kt",
             "ArabicHaiDashboardV3.kt",
+            "ArabicHaiDashboardV4.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
