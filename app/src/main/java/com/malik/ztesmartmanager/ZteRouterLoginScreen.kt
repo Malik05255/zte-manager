@@ -1,8 +1,12 @@
 package com.malik.ztesmartmanager
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,14 +28,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,6 +45,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -48,16 +53,16 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val LoginBgTop = Color(0xFFF8FAFD)
-private val LoginBgBottom = Color(0xFFEDF3F8)
-private val LoginCard = Color.White
-private val LoginInk = Color(0xFF10243A)
-private val LoginMuted = Color(0xFF718096)
-private val LoginBlue = Color(0xFF1769E8)
-private val LoginBlueDark = Color(0xFF0A438E)
-private val LoginLine = Color(0xFFD8E2EC)
-private val LoginGreen = Color(0xFF20B66A)
-private val LoginError = Color(0xFFD84747)
+private val PortalBg = Color(0xFFF3F6FA)
+private val PortalInk = Color(0xFF071525)
+private val PortalMuted = Color(0xFF728096)
+private val PortalBlue = Color(0xFF2D7CFF)
+private val PortalCyan = Color(0xFF10C7D5)
+private val PortalMint = Color(0xFF20C888)
+private val PortalRed = Color(0xFFE45D68)
+private val PortalNight = Color(0xFF06101F)
+private val PortalNight2 = Color(0xFF0A3343)
+private val PortalLine = Color(0xFFE2E8EF)
 
 @Composable
 fun ZteRouterLoginScreen(
@@ -74,182 +79,160 @@ fun ZteRouterLoginScreen(
     val isError = status.startsWith("تعذر") || status.contains("رفض") || status.contains("خطأ")
 
     Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(LoginBgTop, LoginBgBottom)))
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
+        Modifier.fillMaxSize().background(PortalBg).statusBarsPadding().navigationBarsPadding().imePadding()
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            RouterMark()
+            Spacer(Modifier.height(6.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("HAI", color = PortalInk, fontSize = 18.sp, fontWeight = FontWeight.Black)
+                    Text("بوابة الراوتر", color = PortalMuted, fontSize = 9.sp)
+                }
+                Text(
+                    "محلي فقط", color = PortalMint, fontSize = 8.sp, fontWeight = FontWeight.Black,
+                    modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFE8F8F1)).padding(horizontal = 10.dp, vertical = 7.dp)
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+            PortalHero(busy)
             Spacer(Modifier.height(14.dp))
 
-            Text(
-                text = "ZTE Smart HAI",
-                color = LoginInk,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Black
-            )
-
-            Spacer(Modifier.height(22.dp))
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 460.dp)
-                    .shadow(14.dp, RoundedCornerShape(26.dp)),
-                shape = RoundedCornerShape(26.dp),
-                colors = CardDefaults.cardColors(containerColor = LoginCard),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White)
+            Surface(
+                Modifier.fillMaxWidth().widthIn(max = 470.dp).shadow(7.dp, RoundedCornerShape(28.dp)),
+                shape = RoundedCornerShape(28.dp), color = Color.White
             ) {
-                Column(Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
+                Column(Modifier.padding(17.dp)) {
+                    Text("اتصل براوترك", color = PortalInk, fontSize = 16.sp, fontWeight = FontWeight.Black)
+                    Text("العنوان وكلمة المرور لا يغادران مسار الاتصال المحلي", color = PortalMuted, fontSize = 8.sp)
+                    Spacer(Modifier.height(14.dp))
+
                     OutlinedTextField(
                         value = routerAddress,
                         onValueChange = onRouterAddressChange,
-                        label = { Text("عنوان الراوتر", fontSize = 14.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("عنوان الراوتر") },
+                        supportingText = { Text("مثال: 192.168.0.1", fontSize = 8.sp) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                         singleLine = true,
                         enabled = !busy,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = loginFieldColors()
+                        shape = RoundedCornerShape(17.dp),
+                        colors = portalFieldColors()
                     )
-
-                    Spacer(Modifier.height(12.dp))
-
+                    Spacer(Modifier.height(10.dp))
                     OutlinedTextField(
                         value = password,
                         onValueChange = onPasswordChange,
-                        label = { Text("كلمة المرور", fontSize = 14.sp) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("كلمة مرور الإدارة") },
                         visualTransformation = PasswordVisualTransformation(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         singleLine = true,
                         enabled = !busy,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = loginFieldColors()
+                        shape = RoundedCornerShape(17.dp),
+                        colors = portalFieldColors()
                     )
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(
                             checked = rememberPassword,
                             onCheckedChange = onRememberPasswordChange,
                             enabled = !busy,
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = LoginBlue,
-                                uncheckedColor = LoginMuted
-                            )
+                            colors = CheckboxDefaults.colors(checkedColor = PortalBlue, uncheckedColor = PortalMuted)
                         )
-                        Text(
-                            text = "حفظ كلمة المرور",
-                            color = LoginInk,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Column {
+                            Text("تذكر بيانات الدخول", color = PortalInk, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("تُحفظ مشفرة على الجهاز", color = PortalMuted, fontSize = 8.sp)
+                        }
                     }
 
-                    Spacer(Modifier.height(12.dp))
-
+                    Spacer(Modifier.height(8.dp))
                     Button(
                         onClick = onConnect,
                         enabled = !busy && password.isNotBlank() && routerAddress.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = LoginBlue,
-                            disabledContainerColor = Color(0xFFAFC4DF)
-                        )
+                        modifier = Modifier.fillMaxWidth().height(50.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PortalNight, disabledContainerColor = Color(0xFFB8C2CF))
                     ) {
-                        Text(
-                            text = if (busy) "جاري الاتصال…" else "اتصال",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Text(if (busy) "جاري فتح الجلسة…" else "فتح لوحة HAI", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Black)
                     }
 
                     if (status.isNotBlank() && status != "غير متصل" && status != "جاري الاتصال...") {
-                        Spacer(Modifier.height(14.dp))
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (isError) Color(0xFFFFF3F3) else Color(0xFFF1F7FF))
-                                .border(
-                                    1.dp,
-                                    if (isError) Color(0xFFFFD6D6) else Color(0xFFD8E8FF),
-                                    RoundedCornerShape(14.dp)
-                                )
-                                .padding(12.dp)
-                        ) {
-                            Text(
-                                text = status,
-                                color = if (isError) LoginError else LoginBlueDark,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Start
-                            )
-                        }
+                        Spacer(Modifier.height(11.dp))
+                        Text(
+                            status,
+                            color = if (isError) PortalRed else PortalBlue,
+                            fontSize = 9.sp,
+                            lineHeight = 13.sp,
+                            textAlign = TextAlign.Start,
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                .background(if (isError) Color(0xFFFFECEE) else Color(0xFFEAF3FF)).padding(11.dp)
+                        )
                     }
                 }
             }
+            Spacer(Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-private fun RouterMark() {
+private fun PortalHero(busy: Boolean) {
+    val transition = rememberInfiniteTransition(label = "portal")
+    val pulse by transition.animateFloat(
+        initialValue = .88f, targetValue = 1.08f,
+        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Reverse), label = "portal-pulse"
+    )
+
     Box(
-        modifier = Modifier
-            .size(88.dp)
-            .shadow(10.dp, RoundedCornerShape(26.dp))
-            .clip(RoundedCornerShape(26.dp))
-            .background(Color.White)
-            .border(1.dp, LoginLine, RoundedCornerShape(26.dp)),
-        contentAlignment = Alignment.Center
+        Modifier.fillMaxWidth().widthIn(max = 470.dp).height(190.dp).clip(RoundedCornerShape(31.dp))
+            .background(Brush.linearGradient(listOf(PortalNight, PortalNight2)))
     ) {
-        Canvas(Modifier.size(56.dp)) {
-            val center = Offset(size.width / 2f, size.height / 2f)
-            drawCircle(LoginBlue.copy(alpha = 0.08f), radius = 25f, center = center)
-            drawCircle(LoginBlue, radius = 7f, center = center)
-            repeat(3) { index ->
-                val inset = 8f + index * 7f
-                drawArc(
-                    color = LoginBlue.copy(alpha = 0.78f - index * 0.16f),
-                    startAngle = 210f,
-                    sweepAngle = 120f,
-                    useCenter = false,
-                    topLeft = Offset(inset, inset),
-                    size = androidx.compose.ui.geometry.Size(size.width - inset * 2, size.height - inset * 2),
-                    style = Stroke(width = 2.4f, cap = StrokeCap.Round)
-                )
+        Canvas(Modifier.fillMaxSize()) {
+            drawCircle(PortalCyan.copy(alpha = .08f), radius = size.minDimension * .44f, center = Offset(size.width * .86f, size.height * .14f))
+            drawCircle(Color.White.copy(alpha = .035f), radius = size.minDimension * .38f, center = Offset(size.width * .08f, size.height * .88f))
+        }
+        Row(Modifier.fillMaxSize().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("ZTE Smart HAI", color = Color.White, fontSize = 21.sp, fontWeight = FontWeight.Black)
+                Text("اتصال واحد، ثم كل شيء أمامك", color = Color.White.copy(alpha = .62f), fontSize = 9.sp)
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    PortalTag("قراءة حيّة")
+                    PortalTag("read-back")
+                }
             }
-            drawCircle(LoginGreen, radius = 3.6f, center = Offset(center.x, size.height - 7f))
+            Box(Modifier.size(88.dp), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.fillMaxSize().graphicsLayer(scaleX = if (busy) pulse else 1f, scaleY = if (busy) pulse else 1f)) {
+                    repeat(3) { i ->
+                        drawCircle(PortalCyan.copy(alpha = .26f - i * .07f), radius = 20f + i * 17f, style = Stroke(2.2f, cap = StrokeCap.Round))
+                    }
+                    drawCircle(PortalCyan, radius = 7f)
+                }
+                Text("H", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Black)
+            }
         }
     }
 }
 
 @Composable
-private fun loginFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = LoginBlue,
-    unfocusedBorderColor = LoginLine,
-    focusedLabelColor = LoginBlueDark,
-    unfocusedLabelColor = LoginMuted,
-    cursorColor = LoginBlue,
-    focusedTextColor = LoginInk,
-    unfocusedTextColor = LoginInk
+private fun PortalTag(text: String) {
+    Text(
+        text, color = Color.White.copy(alpha = .82f), fontSize = 8.sp, fontWeight = FontWeight.Bold,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(Color.White.copy(alpha = .08f)).padding(horizontal = 9.dp, vertical = 6.dp)
+    )
+}
+
+@Composable
+private fun portalFieldColors() = OutlinedTextFieldDefaults.colors(
+    focusedBorderColor = PortalBlue,
+    unfocusedBorderColor = PortalLine,
+    focusedLabelColor = PortalBlue,
+    unfocusedLabelColor = PortalMuted,
+    cursorColor = PortalBlue,
+    focusedTextColor = PortalInk,
+    unfocusedTextColor = PortalInk
 )

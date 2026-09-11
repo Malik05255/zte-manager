@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ImmersiveDashboard.kt").readText()
+        val dashboard = source("NovaDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,19 +22,17 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة Immersive الجديدة",
-            runtime.contains("ImmersiveDashboard(")
+            "غلاف الأمان يجب أن يستخدم واجهة Nova الجديدة",
+            runtime.contains("NovaDashboard(")
         )
         assertFalse(
-            "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
-            runtime.contains("ReferenceExactDashboard(") ||
+            "لا يجوز إعادة واجهات التصميم القديمة إلى مسار الإنتاج",
+            runtime.contains("ImmersiveDashboard(") ||
+                runtime.contains("ReferenceExactDashboard(") ||
+                runtime.contains("MasterpieceDashboard(") ||
                 runtime.contains("ArabicHaiDashboardV6(") ||
                 runtime.contains("ArabicHaiDashboardV5(") ||
-                runtime.contains("ArabicHaiDashboardV4(") ||
-                runtime.contains("ArabicHaiDashboardV3(") ||
-                runtime.contains("ArabicHaiDashboardV2(") ||
-                runtime.contains("ArabicHaiDashboard(") ||
-                runtime.contains("HaiAdaptiveDashboard(")
+                runtime.contains("ArabicHaiDashboard(")
         )
     }
 
@@ -104,7 +102,9 @@ class ArabicUiPolicyTest {
             "ZTE Smart HAI", "HAI Network", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
             "HAI", "H", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
-            "STC", "Mobily", "Zain", "Wi‑Fi", "LAN", "Ping", "Jitter", "Band", "IP", "Firmware", "read-back", "eNB"
+            "STC", "Mobily", "Zain", "Wi‑Fi", "LAN", "Ping", "Jitter", "Loss", "Band", "IP", "Firmware",
+            "read-back", "eNB", "LIVE", "OFF", "LINK", "Runtime", "Cell Lock", "NR Lock", "Cell ID",
+            "WAN Telemetry", "Thermal Telemetry", "Carrier Aggregation", "QoS", "Blacklist"
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
@@ -115,6 +115,7 @@ class ArabicUiPolicyTest {
             "ArabicHaiDashboardV5.kt",
             "ArabicHaiDashboardV6.kt",
             "ArabicHaiDashboardV6Pages.kt",
+            "ArabicHaiDashboardV6Ui.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
@@ -126,7 +127,8 @@ class ArabicUiPolicyTest {
             "ReferenceDashboard.kt",
             "ReferenceMainActivity.kt",
             "ReferenceExactDashboard.kt",
-            "MasterpieceDashboard.kt"
+            "MasterpieceDashboard.kt",
+            "ImmersiveDashboard.kt"
         )
     }
 }
