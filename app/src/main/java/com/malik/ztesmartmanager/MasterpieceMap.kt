@@ -135,21 +135,21 @@ internal fun RealNetworkMap(
                 .clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .94f)).padding(horizontal = 11.dp, vertical = 8.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(HaiGreen))
+                Box(Modifier.size(8.dp).clip(CircleShape).background(MpGreen))
                 Spacer(Modifier.size(6.dp))
-                Text("خريطة مباشرة", color = HaiInk, fontWeight = FontWeight.Black)
+                Text("خريطة مباشرة", color = MpInk, fontWeight = FontWeight.Black)
             }
-            Text("OpenStreetMap / OpenFreeMap", color = HaiMuted, fontSize = 9.sp)
+            Text("OpenStreetMap / OpenFreeMap", color = MpMuted, fontSize = 9.sp)
         }
 
         Column(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(10.dp)
                 .clip(RoundedCornerShape(17.dp)).background(Color.White.copy(alpha = .96f)).padding(10.dp)
         ) {
-            Text(locationMessage, color = HaiInk, fontSize = 10.sp, lineHeight = 14.sp)
+            Text(locationMessage, color = MpInk, fontSize = 10.sp, lineHeight = 14.sp)
             Spacer(Modifier.height(8.dp))
             Box(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(HaiBlue)
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(13.dp)).background(MpBlue)
                     .clickable {
                         if (hasPermission) moveToKnownLocation()
                         else launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
