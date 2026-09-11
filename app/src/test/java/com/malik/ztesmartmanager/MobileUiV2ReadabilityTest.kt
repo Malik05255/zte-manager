@@ -7,13 +7,18 @@ import org.junit.Test
 class MobileUiV2ReadabilityTest {
     @Test
     fun productionDashboard_keepsMicroLabelsReadable() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/NovaDashboard.kt")
+        val files = listOf(
+            File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt"),
+            File("src/main/java/com/malik/ztesmartmanager/PulseNetworkMap.kt")
+        )
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
-        val tooTiny = regex.findAll(source.readText())
-            .map { it.groupValues[1].toDouble() }
-            .filter { it < 7.0 }
-            .toList()
-        assertTrue("واجهة الجوال تحتوي خطًا أصغر من 7sp: $tooTiny", tooTiny.isEmpty())
+        val tooTiny = files.flatMap { source ->
+            regex.findAll(source.readText())
+                .map { it.groupValues[1].toDouble() }
+                .filter { it < 8.0 }
+                .toList()
+        }
+        assertTrue("واجهة الجوال تحتوي خطًا أصغر من 8sp: $tooTiny", tooTiny.isEmpty())
     }
 
     @Test
@@ -23,38 +28,52 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun novaDashboard_hasMotionAndDistinctInteractionPatterns() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/NovaDashboard.kt").readText()
-        assertTrue(source.contains("rememberInfiniteTransition"))
-        assertTrue(source.contains("animateFloatAsState"))
-        assertTrue(source.contains("animateColorAsState"))
-        assertTrue(source.contains("LazyRow("))
-        assertTrue(source.contains("NovaRadar("))
-        assertTrue(source.contains("RealNetworkMap("))
-        assertTrue(source.contains("NovaBandMatrix("))
-    }
-
-    @Test
-    fun homeDashboard_isScrollableAndUsesProgressiveDisclosure() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/NovaDashboard.kt").readText()
-        assertTrue(source.contains("private fun NovaHome"))
+    fun pulseDashboard_isHomeFirstAndAvoidsCardCramming() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt").readText()
+        assertTrue(source.contains("private fun PulseHome"))
         assertTrue(source.contains("LazyColumn("))
-        assertTrue(source.contains("NovaQuickRail("))
-        assertTrue(source.contains("NovaSpeedStudio("))
-        assertTrue(source.contains("NovaModeRail("))
+        assertTrue(source.contains("PulseHero(snapshot)"))
+        assertTrue(source.contains("PulsePlacementCard("))
+        assertTrue(source.contains("PulseNetworkMap(snapshot"))
+        assertTrue(source.contains("PulseSpeedCard("))
+        assertTrue(source.contains("PulseModeCard("))
     }
 
     @Test
-    fun productionRoute_usesNovaDashboard() {
+    fun homeExplainsQualityInArabicWordsInsteadOfOnlyScores() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt").readText()
+        listOf(
+            "ممتاز جدًا",
+            "جيد جدًا",
+            "بقيت خطوة بسيطة",
+            "ثبّت الراوتر هنا",
+            "غيّر المكان"
+        ).forEach { phrase ->
+            assertTrue("الوصف العربي المبسط مفقود: $phrase", source.contains(phrase))
+        }
+    }
+
+    @Test
+    fun mapDrawsLinkOnlyFromVerifiedTowerCoordinates() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/PulseNetworkMap.kt").readText()
+        assertTrue(source.contains("verifiedTowerCoordinate(snapshot)"))
+        assertTrue(source.contains("LineLayer("))
+        assertTrue(source.contains("لن نرسم خطًا وهميًا"))
+        assertTrue(source.contains("lineGeoJson("))
+    }
+
+    @Test
+    fun productionRoute_usesPulseDashboard() {
         val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
-        assertTrue(runtime.contains("NovaDashboard("))
+        assertTrue(runtime.contains("PulseDashboard("))
     }
 
     @Test
     fun productionDashboard_keepsTruthFirstLanguage() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/NovaDashboard.kt").readText()
-        listOf("بدون أرقام تجريبية", "لا تُختلق", "read-back").forEach {
-            assertTrue("سياسة الدقة مفقودة: $it", source.contains(it))
-        }
+        val dashboard = File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt").readText()
+        val map = File("src/main/java/com/malik/ztesmartmanager/PulseNetworkMap.kt").readText()
+        assertTrue(dashboard.contains("لا يُرسم إلا إذا كان موثقًا"))
+        assertTrue(dashboard.contains("لن نعلن نجاح التغيير قبل أن يقرأه الراوتر مرة أخرى"))
+        assertTrue(map.contains("لا نرسم خطًا وهميًا"))
     }
 }
