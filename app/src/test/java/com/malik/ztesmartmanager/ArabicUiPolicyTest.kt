@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ArabicHaiDashboardV3.kt").readText()
+        val dashboard = source("HaiDashboardV5.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,12 +22,13 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة V3 العربية المبسطة",
-            runtime.contains("ArabicHaiDashboardV3(")
+            "غلاف الأمان يجب أن يستخدم واجهة V5 المعاد بناؤها",
+            runtime.contains("HaiDashboardV5(")
         )
         assertFalse(
             "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
-            runtime.contains("ArabicHaiDashboardV2(") ||
+            runtime.contains("ArabicHaiDashboardV3(") ||
+                runtime.contains("ArabicHaiDashboardV2(") ||
                 runtime.contains("ArabicHaiDashboard(") ||
                 runtime.contains("HaiAdaptiveDashboard(")
         )
@@ -63,6 +64,9 @@ class ArabicUiPolicyTest {
         assertTrue(isArabicOrTechnicalOnly("5G NSA"))
         assertTrue(isArabicOrTechnicalOnly("RSRP"))
         assertTrue(isArabicOrTechnicalOnly("ZTE Smart HAI"))
+        assertTrue(isArabicOrTechnicalOnly("Carrier Aggregation"))
+        assertTrue(isArabicOrTechnicalOnly("Firmware"))
+        assertTrue(isArabicOrTechnicalOnly("Hardware"))
         assertTrue(isArabicOrTechnicalOnly("A"))
         assertFalse(isArabicOrTechnicalOnly("Speed Test"))
         assertFalse(isArabicOrTechnicalOnly("Network Stat"))
@@ -97,6 +101,7 @@ class ArabicUiPolicyTest {
         )
 
         private val TECHNICAL_TOKENS = listOf(
+            "Carrier Aggregation", "Firmware", "Hardware",
             "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
             "A"
@@ -105,6 +110,7 @@ class ArabicUiPolicyTest {
         private val LEGACY_INACTIVE_UI = setOf(
             "ArabicHaiDashboard.kt",
             "ArabicHaiDashboardV2.kt",
+            "ArabicHaiDashboardV3.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
