@@ -6,17 +6,16 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * One sizing contract for the production application.
+ * Production sizing contract.
  *
- * Phones are rendered against a virtual 393dp design width. This keeps card geometry, spacing,
- * radii and typography stable across Honor 200 and other tall Android phones instead of letting
- * every screen derive a different scale from its height. Tablets keep their native density.
+ * Never override Android density or fontScale. The previous width-normalized Density changed the
+ * meaning of dp/sp for the entire composition and could produce clipping, inconsistent card sizes,
+ * and different geometry between pages on tall phones such as HONOR 200. We now keep the platform
+ * density untouched and adapt only explicit layout metrics.
  */
 @Immutable
 data class HaiUiMetrics(
@@ -36,15 +35,15 @@ data class HaiUiMetrics(
 private val DefaultHaiUiMetrics = HaiUiMetrics(
     phone = true,
     compact = false,
-    pagePadding = 14.dp,
-    sectionGap = 8.dp,
+    pagePadding = 15.dp,
+    sectionGap = 10.dp,
     cardRadius = 20.dp,
     smallRadius = 14.dp,
     headerHeight = 72.dp,
-    bottomNavHeight = 78.dp,
-    chromeButtonSize = 36.dp,
+    bottomNavHeight = 72.dp,
+    chromeButtonSize = 38.dp,
     minimumTouchTarget = 48.dp,
-    mapHeight = 260.dp
+    mapHeight = 270.dp
 )
 
 val LocalHaiUiMetrics = staticCompositionLocalOf { DefaultHaiUiMetrics }
@@ -52,50 +51,48 @@ val LocalHaiUiMetrics = staticCompositionLocalOf { DefaultHaiUiMetrics }
 @Composable
 fun HaiUiScaleProvider(content: @Composable () -> Unit) {
     val configuration = LocalConfiguration.current
-    val parentDensity = LocalDensity.current
-    val screenWidthDp = configuration.screenWidthDp.coerceAtLeast(1)
-    val phone = screenWidthDp < 600
+    val width = configuration.screenWidthDp.coerceAtLeast(1)
+    val phone = width < 600
 
-    // Width-only normalization is deliberate. Tall screens must not inflate cards or typography.
-    val densityFactor = if (phone) {
-        (screenWidthDp / PHONE_DESIGN_WIDTH_DP).coerceIn(0.90f, 1.10f)
-    } else {
-        1f
-    }
-    val controlledFontScale = parentDensity.fontScale.coerceIn(1.00f, 1.15f)
-    val controlledDensity = remember(parentDensity.density, controlledFontScale, densityFactor) {
-        Density(
-            density = parentDensity.density * densityFactor,
-            fontScale = controlledFontScale
-        )
-    }
-
-    val effectiveWidthDp = if (phone) PHONE_DESIGN_WIDTH_DP.toInt() else screenWidthDp
-    val metrics = remember(phone, effectiveWidthDp) {
-        if (phone) {
-            DefaultHaiUiMetrics.copy(compact = effectiveWidthDp < 370)
-        } else {
-            HaiUiMetrics(
+    val metrics = remember(width, phone) {
+        when {
+            !phone -> HaiUiMetrics(
                 phone = false,
                 compact = false,
-                pagePadding = 18.dp,
-                sectionGap = 10.dp,
-                cardRadius = 20.dp,
-                smallRadius = 14.dp,
-                headerHeight = 70.dp,
+                pagePadding = 22.dp,
+                sectionGap = 14.dp,
+                cardRadius = 22.dp,
+                smallRadius = 15.dp,
+                headerHeight = 76.dp,
                 bottomNavHeight = 74.dp,
-                chromeButtonSize = 36.dp,
-                minimumTouchTarget = 48.dp,
-                mapHeight = 260.dp
+                chromeButtonSize = 40.dp,
+                minimumTouchTarget = 50.dp,
+                mapHeight = 320.dp
             )
+            width < 360 -> DefaultHaiUiMetrics.copy(
+                compact = true,
+                pagePadding = 12.dp,
+                sectionGap = 8.dp,
+                cardRadius = 18.dp,
+                headerHeight = 68.dp,
+                bottomNavHeight = 70.dp,
+                chromeButtonSize = 36.dp,
+                mapHeight = 245.dp
+            )
+            width >= 420 -> DefaultHaiUiMetrics.copy(
+                pagePadding = 18.dp,
+                sectionGap = 12.dp,
+                cardRadius = 22.dp,
+                headerHeight = 76.dp,
+                bottomNavHeight = 74.dp,
+                chromeButtonSize = 40.dp,
+                mapHeight = 290.dp
+            )
+            else -> DefaultHaiUiMetrics
         }
     }
 
-    CompositionLocalProvider(
-        LocalDensity provides controlledDensity,
-        LocalHaiUiMetrics provides metrics,
-        content = content
-    )
+    CompositionLocalProvider(LocalHaiUiMetrics provides metrics, content = content)
 }
 
 const val PHONE_DESIGN_WIDTH_DP = 393f
