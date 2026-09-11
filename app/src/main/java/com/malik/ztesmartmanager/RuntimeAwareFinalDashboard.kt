@@ -163,7 +163,7 @@ fun RuntimeAwareFinalDashboard(
     )
 
     HaiUiScaleProvider {
-        ArabicHaiDashboardV3(
+        HaiDashboardV5(
             snapshot = snapshot,
             capabilities = effectiveCapabilities,
             runtime = runtime,
