@@ -133,7 +133,7 @@ fun RuntimeAwareFinalDashboard(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
 
-    ImmersiveDashboard(
+    NovaDashboard(
         snapshot = snapshot,
         capabilities = effectiveCapabilities,
         runtime = runtime,
