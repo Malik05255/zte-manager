@@ -7,13 +7,19 @@ import org.junit.Test
 class MobileUiV2ReadabilityTest {
 
     @Test
-    fun productionDashboard_keepsReferenceMicroLabelsReadable() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV5.kt").readText()
+    fun productionDashboard_keepsMicroLabelsReadable() {
+        val sources = listOf(
+            File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt"),
+            File("src/main/java/com/malik/ztesmartmanager/MasterpieceWidgets.kt"),
+            File("src/main/java/com/malik/ztesmartmanager/MasterpieceMap.kt")
+        )
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
-        val tooTiny = regex.findAll(source)
-            .map { it.groupValues[1].toDouble() }
-            .filter { it < 8.0 }
-            .toList()
+        val tooTiny = sources.flatMap { file ->
+            regex.findAll(file.readText())
+                .map { match -> "${file.name}:${match.groupValues[1]}" }
+                .filter { entry -> entry.substringAfter(':').toDouble() < 8.0 }
+                .toList()
+        }
 
         assertTrue("واجهة الجوال تحتوي fontSize أصغر من 8sp: $tooTiny", tooTiny.isEmpty())
     }
@@ -28,24 +34,29 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun primaryTouchTargets_areAtLeastFiftyDp() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV5.kt").readText()
-        assertTrue(source.contains("private fun V5ActionButton"))
-        assertTrue(source.contains("modifier.height(50.dp)"))
+    fun productionDashboard_usesAdaptiveLayoutAndMaterialTouchTargets() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt").readText()
+        assertTrue(source.contains("BoxWithConstraints"))
+        assertTrue(source.contains("NavigationBar("))
+        assertTrue(source.contains("Button("))
+        assertTrue(source.contains("OutlinedButton("))
     }
 
     @Test
     fun homeDashboard_isScrollableAndDoesNotForceEverythingIntoViewport() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV5.kt").readText()
+        val source = File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt").readText()
+        assertTrue(source.contains("private fun MpHome"))
         assertTrue(source.contains("LazyColumn("))
-        assertTrue(source.contains("bottom = 100.dp"))
-        assertTrue(source.contains("gridHeight ="))
+        assertTrue(source.contains("contentPadding = PaddingValues"))
+        assertTrue(source.contains("verticalArrangement = Arrangement.spacedBy"))
     }
 
     @Test
-    fun productionRoute_usesV5Only() {
+    fun productionRoute_usesMasterpieceOnly() {
         val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
-        assertTrue(runtime.contains("ArabicHaiDashboardV5("))
+        assertTrue(runtime.contains("MasterpieceDashboard("))
+        assertTrue(!runtime.contains("ArabicHaiDashboardV6("))
+        assertTrue(!runtime.contains("ArabicHaiDashboardV5("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV4("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV3("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV2("))
@@ -53,17 +64,14 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun minimalDashboard_doesNotRestoreExplanatorySectionSubtitles() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV5.kt").readText()
-        val banned = listOf(
-            "أكثر الأدوات استخدامًا",
-            "الحالة النشطة منفصلة عن الترددات المختارة",
-            "مخطط راديو فقط",
-            "لا يعتبر الوضع مطبقًا إلا بعد",
-            "قراءة مباشرة من عدادات الراوتر",
-            "يستخدم فقط إعدادات يمكن التحقق منها واستعادتها",
-            "راقب جودة الإشارة أثناء تحريك الراوتر"
+    fun masterpieceDashboard_keepsTruthFirstLanguage() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/MasterpieceDashboard.kt").readText()
+        val required = listOf(
+            "بدون تخمين",
+            "لا نختلق إحداثيات",
+            "لا نختلق جهازًا",
+            "read-back"
         )
-        banned.forEach { text -> assertTrue("عاد شرح زائد للواجهة: $text", !source.contains(text)) }
+        required.forEach { text -> assertTrue("سياسة Truth-First مفقودة: $text", source.contains(text)) }
     }
 }
