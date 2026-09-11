@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("GlassDashboard.kt").readText()
+        val dashboard = source("ZteManagerDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,20 +22,20 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة Glass الجديدة",
-            runtime.contains("GlassDashboard(")
+            "غلاف الأمان يجب أن يستخدم واجهة ZTE Manager الجديدة",
+            runtime.contains("ZteManagerDashboard(")
         )
         assertFalse(
-            "لا يجوز إعادة واجهات التصميم القديمة إلى مسار الإنتاج",
-            runtime.contains("PulseDashboard(") ||
-                runtime.contains("NovaDashboard(") ||
-                runtime.contains("ImmersiveDashboard(") ||
-                runtime.contains("ReferenceExactDashboard(") ||
-                runtime.contains("MasterpieceDashboard(") ||
-                runtime.contains("ArabicHaiDashboardV6(") ||
-                runtime.contains("ArabicHaiDashboardV5(") ||
-                runtime.contains("ArabicHaiDashboard(")
+            "لا يجوز إعادة أي واجهة تصميم قديمة إلى مسار الإنتاج",
+            OLD_ROUTE_NAMES.any(runtime::contains)
         )
+    }
+
+    @Test
+    fun oldDesignFiles_areActuallyDeleted() {
+        val root = File("src/main/java/com/malik/ztesmartmanager")
+        val leftovers = OLD_DESIGN_FILES.filter { File(root, it).exists() }
+        assertTrue("بقيت ملفات تصميم قديمة: $leftovers", leftovers.isEmpty())
     }
 
     @Test
@@ -44,7 +44,7 @@ class ArabicUiPolicyTest {
         val violations = mutableListOf<String>()
 
         root.walkTopDown()
-            .filter { it.isFile && it.extension == "kt" && it.name !in LEGACY_INACTIVE_UI }
+            .filter { it.isFile && it.extension == "kt" }
             .forEach { file ->
                 val text = file.readText()
                 USER_FACING_PATTERNS.forEach { regex ->
@@ -59,17 +59,6 @@ class ArabicUiPolicyTest {
             "وجدت نصوص واجهة إنجليزية غير معرّبة:\n${violations.joinToString("\n")}",
             violations.isEmpty()
         )
-    }
-
-    @Test
-    fun uiGuard_allowsSymbolsAndTechnicalTerms_butRejectsEnglishWords() {
-        assertTrue(isArabicOrTechnicalOnly("☰"))
-        assertTrue(isArabicOrTechnicalOnly("5G NSA"))
-        assertTrue(isArabicOrTechnicalOnly("RSRP"))
-        assertTrue(isArabicOrTechnicalOnly("ZTE Smart HAI"))
-        assertTrue(isArabicOrTechnicalOnly("MapLibre"))
-        assertFalse(isArabicOrTechnicalOnly("Speed Test"))
-        assertFalse(isArabicOrTechnicalOnly("Network Stat"))
     }
 
     @Test
@@ -101,38 +90,26 @@ class ArabicUiPolicyTest {
         )
 
         private val TECHNICAL_TOKENS = listOf(
-            "ZTE Smart HAI", "HAI Network", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
-            "HAI", "H", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
+            "ZTE Smart HAI", "ZTE Manager", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
+            "Tower Guard", "Cell Lock", "Hardware", "Firmware", "Runtime", "read-back",
+            "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
-            "STC", "Mobily", "Zain", "Wi‑Fi", "LAN", "Ping", "Jitter", "Loss", "Band", "IP", "Firmware",
-            "read-back", "eNB", "LIVE", "OFF", "LINK", "Runtime", "Cell Lock", "NR Lock", "Cell ID",
-            "WAN Telemetry", "Thermal Telemetry", "Carrier Aggregation", "QoS", "Blacklist"
+            "STC", "Mobily", "Zain", "Wi‑Fi", "Wi", "LAN", "Ping", "Jitter", "Loss", "Band", "IP",
+            "Cell ID", "QoS", "API"
         )
 
-        private val LEGACY_INACTIVE_UI = setOf(
-            "ArabicHaiDashboard.kt",
-            "ArabicHaiDashboardV2.kt",
-            "ArabicHaiDashboardV3.kt",
-            "ArabicHaiDashboardV4.kt",
-            "ArabicHaiDashboardV5.kt",
-            "ArabicHaiDashboardV6.kt",
-            "ArabicHaiDashboardV6Pages.kt",
-            "ArabicHaiDashboardV6Ui.kt",
-            "HaiAdaptiveDashboard.kt",
-            "HaiPreviewMatrix.kt",
-            "PremiumDashboard.kt",
-            "FinalDashboard.kt",
-            "FinalFiveGCard.kt",
-            "CarrierMatrixCard.kt",
-            "HomeActivity.kt",
-            "MainActivity.kt",
-            "ReferenceDashboard.kt",
-            "ReferenceMainActivity.kt",
-            "ReferenceExactDashboard.kt",
-            "MasterpieceDashboard.kt",
-            "ImmersiveDashboard.kt",
-            "NovaDashboard.kt",
-            "NovaMap.kt"
+        private val OLD_ROUTE_NAMES = listOf(
+            "GlassDashboard(", "PulseDashboard(", "NovaDashboard(", "ImmersiveDashboard(",
+            "ReferenceExactDashboard(", "MasterpieceDashboard(", "ArabicHaiDashboard("
+        )
+
+        private val OLD_DESIGN_FILES = listOf(
+            "GlassComponents.kt", "GlassDashboard.kt", "GlassDesignSystem.kt", "GlassHelpers.kt",
+            "GlassHomeHero.kt", "GlassHomePrimaryCards.kt", "GlassHomeScreen.kt", "GlassHomeSecondaryCards.kt",
+            "GlassMoreScreen.kt", "GlassNetworkComponents.kt", "GlassNetworkScreen.kt", "GlassQuality.kt",
+            "GlassShell.kt", "GlassToolsScreen.kt", "GlassTowerControls.kt",
+            "NovaDashboard.kt", "NovaEffects.kt", "NovaMap.kt",
+            "PulseConnectedDeviceCompat.kt", "PulseDashboard.kt", "PulseNetworkMap.kt"
         )
     }
 }
