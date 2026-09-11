@@ -29,10 +29,5 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ReferenceMainActivity"
-            android:exported="false"
-            android:screenOrientation="unspecified" />
-
     </application>
 </manifest>
