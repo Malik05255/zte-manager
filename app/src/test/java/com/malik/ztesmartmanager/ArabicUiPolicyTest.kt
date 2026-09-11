@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("NovaDashboard.kt").readText()
+        val dashboard = source("PulseDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,12 +22,13 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة Nova الجديدة",
-            runtime.contains("NovaDashboard(")
+            "غلاف الأمان يجب أن يستخدم واجهة Pulse الجديدة",
+            runtime.contains("PulseDashboard(")
         )
         assertFalse(
             "لا يجوز إعادة واجهات التصميم القديمة إلى مسار الإنتاج",
-            runtime.contains("ImmersiveDashboard(") ||
+            runtime.contains("NovaDashboard(") ||
+                runtime.contains("ImmersiveDashboard(") ||
                 runtime.contains("ReferenceExactDashboard(") ||
                 runtime.contains("MasterpieceDashboard(") ||
                 runtime.contains("ArabicHaiDashboardV6(") ||
@@ -128,7 +129,9 @@ class ArabicUiPolicyTest {
             "ReferenceMainActivity.kt",
             "ReferenceExactDashboard.kt",
             "MasterpieceDashboard.kt",
-            "ImmersiveDashboard.kt"
+            "ImmersiveDashboard.kt",
+            "NovaDashboard.kt",
+            "NovaMap.kt"
         )
     }
 }
