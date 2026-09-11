@@ -27,8 +27,8 @@ class ZteHttpTransport(routerAddress: String) {
         val requested = params["cmd"].orEmpty()
             .split(',')
             .asSequence()
-            .map(String::trim)
-            .filter(String::isNotBlank)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
             .toSet()
 
         SPARSE_MULTI_DATA_FIELDS
