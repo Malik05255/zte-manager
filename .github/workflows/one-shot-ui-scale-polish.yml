@@ -1,0 +1,349 @@
+name: One-shot UI scale polish
+
+on:
+  push:
+    branches:
+      - feature/connect-performance-credentials-0.5.7
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/connect-performance-credentials-0.5.7
+          fetch-depth: 0
+
+      - name: Apply project-wide readable sizing and safe bottom navigation
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace(path, old, new, count=1):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'missing expected text in {path}: {old[:90]!r}')
+              p.write_text(text.replace(old, new, count))
+
+          # 1) All non-home production screens: bottom nav participates in layout instead of
+          # overlaying the scroll content. This fixes the clipped/hidden last card on scroll.
+          dash = Path('app/src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt')
+          text = dash.read_text()
+          old_start = '''                Box(Modifier.weight(1f)) {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),'''
+          new_start = '''                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),'''
+          if old_start not in text:
+              raise SystemExit('production LazyColumn overlay scaffold changed unexpectedly')
+          text = text.replace(old_start, new_start, 1)
+          text = text.replace(
+              'bottom = (layout.bottomBarHeight + layout.gap).dp',
+              'bottom = (layout.gap * 2).dp',
+              1
+          )
+          old_end = '''                    }
+                    M3BottomNav(section, { section = it }, Modifier.align(Alignment.BottomCenter))
+                }'''
+          new_end = '''                }
+                M3BottomNav(section) { section = it }'''
+          if old_end not in text:
+              raise SystemExit('production bottom-nav overlay ending changed unexpectedly')
+          text = text.replace(old_end, new_end, 1)
+
+          # Rebuild live logs for readability: larger cards, explicit metric columns and no
+          # single giant nested card. All values remain truth-first from SafeTelemetrySample.
+          logs = r'''@Composable
+private fun M3Logs(layout: M3Layout, samples: List<SafeTelemetrySample>, performance: NetworkPerformance?) {
+    Column(verticalArrangement = Arrangement.spacedBy(layout.gap.dp)) {
+        M3Card(layout) {
+            Column(Modifier.padding(20.dp)) {
+                Text("السجلات الحية", color = M3Ink, fontSize = m3sp(layout, 24), fontWeight = FontWeight.Black)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "آخر القراءات التي استلمها التطبيق فعلًا من الراوتر",
+                    color = M3Muted,
+                    fontSize = m3sp(layout, 13),
+                    lineHeight = m3sp(layout, 18)
+                )
+                performance?.let {
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "آخر اختبار سرعة: تنزيل ${it.downloadMbps?.let(::m3Fmt1) ?: "—"} Mb/s • رفع ${it.uploadMbps?.let(::m3Fmt1) ?: "—"} Mb/s • ${it.latencyMs?.let(::m3Fmt0) ?: "—"} ms",
+                        color = M3Blue,
+                        fontSize = m3sp(layout, 11),
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+
+        val recent = samples.takeLast(40).asReversed()
+        if (recent.isEmpty()) {
+            M3Card(layout) {
+                Text(
+                    "لا توجد قراءات حية حتى الآن",
+                    color = M3Muted,
+                    fontSize = m3sp(layout, 13),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp)
+                )
+            }
+        } else {
+            recent.forEach { sample ->
+                val rsrp = if (sample.nrVerified) sample.nrRsrp else sample.lteRsrp
+                val sinr = if (sample.nrVerified) sample.nrSinr else sample.lteSinr
+                val bandRaw = if (sample.nrVerified) sample.nrBand else sample.lteBand
+                val bandNumber = m3BandNumber(bandRaw)
+                val band = when {
+                    bandNumber == null -> "—"
+                    sample.nrVerified -> "n$bandNumber"
+                    else -> "B$bandNumber"
+                }
+                val network = when {
+                    sample.nrVerified -> "5G"
+                    sample.networkType.orEmpty().contains("LTE", true) || sample.networkType.orEmpty().contains("4G", true) -> "4G"
+                    else -> "غير مؤكد"
+                }
+                val aggregation = if (sample.caVerified) "+" else ""
+
+                M3Card(layout) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 15.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                m3Time(sample.timestampEpochMs),
+                                color = M3Ink,
+                                fontSize = m3sp(layout, 16),
+                                fontWeight = FontWeight.Black
+                            )
+                            Spacer(Modifier.weight(1f))
+                            Text(
+                                "$network$aggregation • $band",
+                                color = M3Ink,
+                                fontSize = m3sp(layout, 16),
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            M3LogMetric("RSRP", rsrp?.let { "${m3Fmt1(it)} dBm" } ?: "—", Modifier.weight(1f))
+                            M3LogMetric("SINR", sinr?.let { "${m3Fmt1(it)} dB" } ?: "—", Modifier.weight(1f))
+                            M3LogMetric("PCI", sample.pci?.toString() ?: "—", Modifier.weight(1f))
+                            M3LogMetric("EARFCN", sample.earfcn?.toString() ?: "—", Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3LogMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = M3Muted, fontSize = 9.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        Spacer(Modifier.height(2.dp))
+        Text(
+            value,
+            color = M3Ink,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+'''
+          pattern = re.compile(r'@Composable\nprivate fun M3Logs\(.*?(?=\n@Composable\nprivate fun M3More)', re.S)
+          text, n = pattern.subn(logs.rstrip(), text, count=1)
+          if n != 1:
+              raise SystemExit(f'could not replace M3Logs, count={n}')
+          dash.write_text(text)
+
+          # 2) Global responsive contract: larger, clearer cards and text on every production page.
+          policy = Path('app/src/main/java/com/malik/ztesmartmanager/core/presentation/HaiResponsivePolicy.kt')
+          text = policy.read_text()
+          text = text.replace(
+              'val textScale = widthScale.coerceIn(1.00f, 1.08f)',
+              'val textScale = (widthScale * 1.08f).coerceIn(1.08f, 1.16f)'
+          )
+          text = text.replace('HaiSizeClass.COMPACT -> 10\n            HaiSizeClass.STANDARD -> 12\n            HaiSizeClass.LARGE -> 18',
+                              'HaiSizeClass.COMPACT -> 12\n            HaiSizeClass.STANDARD -> 14\n            HaiSizeClass.LARGE -> 20')
+          text = text.replace('HaiSizeClass.COMPACT -> 5\n            HaiSizeClass.STANDARD -> 6\n            HaiSizeClass.LARGE -> 10',
+                              'HaiSizeClass.COMPACT -> 7\n            HaiSizeClass.STANDARD -> 8\n            HaiSizeClass.LARGE -> 12')
+          text = text.replace('HaiSizeClass.COMPACT -> 16\n                HaiSizeClass.STANDARD -> 18\n                HaiSizeClass.LARGE -> 20',
+                              'HaiSizeClass.COMPACT -> 18\n                HaiSizeClass.STANDARD -> 20\n                HaiSizeClass.LARGE -> 22')
+          text = text.replace('sizeClass == HaiSizeClass.COMPACT -> 148\n                else -> 156',
+                              'sizeClass == HaiSizeClass.COMPACT -> 160\n                else -> 172')
+          text = text.replace('sizeClass == HaiSizeClass.COMPACT -> 126\n                else -> 132',
+                              'sizeClass == HaiSizeClass.COMPACT -> 140\n                else -> 150')
+          text = text.replace('HaiSizeClass.LARGE -> 260\n                else -> 235',
+                              'HaiSizeClass.LARGE -> 290\n                else -> 260')
+          text = text.replace('HaiSizeClass.LARGE -> 190\n                else -> 170',
+                              'HaiSizeClass.LARGE -> 205\n                else -> 184')
+          text = text.replace('HaiSizeClass.LARGE -> 74\n                else -> 70',
+                              'HaiSizeClass.LARGE -> 82\n                else -> 78')
+          policy.write_text(text)
+
+          # 3) Shared sizing/chrome used by Home and all other pages.
+          sizing = Path('app/src/main/java/com/malik/ztesmartmanager/HaiUiSizing.kt')
+          text = sizing.read_text()
+          for old, new in [
+              ('pagePadding = 12.dp', 'pagePadding = 14.dp'),
+              ('sectionGap = 6.dp', 'sectionGap = 8.dp'),
+              ('cardRadius = 18.dp', 'cardRadius = 20.dp'),
+              ('smallRadius = 13.dp', 'smallRadius = 14.dp'),
+              ('headerHeight = 66.dp', 'headerHeight = 72.dp'),
+              ('bottomNavHeight = 70.dp', 'bottomNavHeight = 78.dp'),
+              ('chromeButtonSize = 32.dp', 'chromeButtonSize = 36.dp'),
+              ('minimumTouchTarget = 44.dp', 'minimumTouchTarget = 48.dp'),
+              ('mapHeight = 235.dp', 'mapHeight = 260.dp'),
+              ('fontScale.coerceIn(1.00f, 1.08f)', 'fontScale.coerceIn(1.00f, 1.15f)'),
+              ('pagePadding = 18.dp', 'pagePadding = 20.dp'),
+              ('sectionGap = 10.dp', 'sectionGap = 12.dp'),
+              ('cardRadius = 20.dp', 'cardRadius = 22.dp'),
+              ('smallRadius = 14.dp', 'smallRadius = 16.dp'),
+              ('headerHeight = 70.dp', 'headerHeight = 78.dp'),
+              ('bottomNavHeight = 74.dp', 'bottomNavHeight = 82.dp'),
+              ('chromeButtonSize = 36.dp', 'chromeButtonSize = 40.dp'),
+              ('mapHeight = 260.dp', 'mapHeight = 290.dp'),
+          ]:
+              if old in text:
+                  text = text.replace(old, new, 1)
+          sizing.write_text(text)
+
+          chrome = Path('app/src/main/java/com/malik/ztesmartmanager/HaiSharedChrome.kt')
+          text = chrome.read_text()
+          replacements = {
+              'fontSize = 20.5.sp': 'fontSize = 22.sp',
+              'lineHeight = 21.sp': 'lineHeight = 23.sp',
+              'fontSize = 8.2.sp': 'fontSize = 10.sp',
+              'lineHeight = 9.sp': 'lineHeight = 12.sp',
+              '.height(33.dp)': '.height(36.dp)',
+              'fontSize = 9.2.sp': 'fontSize = 10.5.sp',
+              'Modifier.size(23.dp)': 'Modifier.size(25.dp)',
+              'Modifier.size(17.dp)': 'Modifier.size(19.dp)',
+              'Modifier.size(21.dp)': 'Modifier.size(24.dp)',
+              'fontSize = 7.7.sp': 'fontSize = 9.2.sp',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'missing shared chrome token: {old}')
+              text = text.replace(old, new, 1)
+          chrome.write_text(text)
+
+          # 4) Home: use larger reference rows. Scrolling is already enabled, so quality wins
+          # over trying to squeeze everything above the fold.
+          design = Path('app/src/main/java/com/malik/ztesmartmanager/HaiReferenceDesign.kt')
+          text = design.read_text()
+          for old, new in [
+              ('HeroHeight: Dp = 160.dp', 'HeroHeight: Dp = 184.dp'),
+              ('MetricHeight: Dp = 58.dp', 'MetricHeight: Dp = 70.dp'),
+              ('MiddleRowHeight: Dp = 136.dp', 'MiddleRowHeight: Dp = 176.dp'),
+              ('TowerRowHeight: Dp = 118.dp', 'TowerRowHeight: Dp = 146.dp'),
+              ('BottomRowHeight: Dp = 94.dp', 'BottomRowHeight: Dp = 122.dp'),
+          ]:
+              if old not in text:
+                  raise SystemExit(f'missing reference design token: {old}')
+              text = text.replace(old, new, 1)
+          design.write_text(text)
+
+          home = Path('app/src/main/java/com/malik/ztesmartmanager/HaiHomeDashboardV4.kt')
+          text = home.read_text()
+          for old, new in [
+              ('height(176.dp)', 'height(H4.HeroHeight)'),
+              ('height(64.dp)', 'height(H4.MetricHeight)'),
+              ('height(160.dp)', 'height(H4.MiddleRowHeight)'),
+              ('height(134.dp)', 'height(H4.TowerRowHeight)'),
+              ('height(112.dp)', 'height(H4.BottomRowHeight)'),
+          ]:
+              if old not in text:
+                  raise SystemExit(f'missing home geometry: {old}')
+              text = text.replace(old, new, 1)
+          home.write_text(text)
+
+          # 5) Update regression tests to protect the new readable/safe-scroll contract.
+          test = Path('app/src/test/java/com/malik/ztesmartmanager/MobileUiV2ReadabilityTest.kt')
+          text = test.read_text()
+          text = text.replace('policy.contains("widthScale.coerceIn(1.00f, 1.08f)")',
+                              'policy.contains("(widthScale * 1.08f).coerceIn(1.08f, 1.16f)")')
+          old = '''        assertTrue(home.contains("height(176.dp)"))
+        assertTrue(home.contains("height(64.dp)"))
+        assertTrue(home.contains("height(160.dp)"))
+        assertTrue(home.contains("height(134.dp)"))
+        assertTrue(home.contains("height(112.dp)"))'''
+          new = '''        assertTrue(home.contains("height(H4.HeroHeight)"))
+        assertTrue(home.contains("height(H4.MetricHeight)"))
+        assertTrue(home.contains("height(H4.MiddleRowHeight)"))
+        assertTrue(home.contains("height(H4.TowerRowHeight)"))
+        assertTrue(home.contains("height(H4.BottomRowHeight)"))'''
+          if old not in text:
+              raise SystemExit('mobile UI home geometry test changed unexpectedly')
+          text = text.replace(old, new, 1)
+          test.write_text(text)
+
+          rtest = Path('app/src/test/java/com/malik/ztesmartmanager/core/presentation/HaiResponsivePolicyTest.kt')
+          text = rtest.read_text()
+          for old, new in [
+              ('assertTrue(spec.textScale >= 1.00f)', 'assertTrue(spec.textScale >= 1.08f)'),
+              ('assertEquals(10, spec.horizontalPaddingDp)', 'assertEquals(12, spec.horizontalPaddingDp)'),
+              ('assertEquals(5, spec.sectionGapDp)', 'assertEquals(7, spec.sectionGapDp)'),
+              ('assertEquals(16, spec.cardRadiusDp)', 'assertEquals(18, spec.cardRadiusDp)'),
+              ('assertEquals(148, spec.networkCardHeightDp)', 'assertEquals(160, spec.networkCardHeightDp)'),
+              ('assertEquals(126, spec.speedCardHeightDp)', 'assertEquals(140, spec.speedCardHeightDp)'),
+              ('assertEquals(70, spec.bottomBarHeightDp)', 'assertEquals(78, spec.bottomBarHeightDp)'),
+              ('assertEquals(12, spec.horizontalPaddingDp)', 'assertEquals(14, spec.horizontalPaddingDp)'),
+              ('assertEquals(6, spec.sectionGapDp)', 'assertEquals(8, spec.sectionGapDp)'),
+              ('assertEquals(18, spec.cardRadiusDp)', 'assertEquals(20, spec.cardRadiusDp)'),
+              ('assertEquals(156, spec.networkCardHeightDp)', 'assertEquals(172, spec.networkCardHeightDp)'),
+              ('assertEquals(132, spec.speedCardHeightDp)', 'assertEquals(150, spec.speedCardHeightDp)'),
+              ('assertTrue(spec.textScale in 1.00f..1.01f)', 'assertTrue(spec.textScale in 1.08f..1.09f)'),
+              ('assertEquals(1.08f, spec.textScale, 0.0001f)', 'assertEquals(1.16f, spec.textScale, 0.0001f)'),
+              ('assertTrue(spec.textScale in 1.04f..1.06f)', 'assertTrue(spec.textScale in 1.13f..1.14f)'),
+              ('assertTrue(spec.textScale <= 1.08f)', 'assertTrue(spec.textScale <= 1.16f)'),
+          ]:
+              text = text.replace(old, new)
+          rtest.write_text(text)
+
+          # Add a direct regression check for the bottom-nav overlap bug.
+          htest = Path('app/src/test/java/com/malik/ztesmartmanager/HaiReferenceDesignTest.kt')
+          text = htest.read_text()
+          marker = '''    @Test
+    fun sharedChrome_andHome_useSameReferenceDesignSystem() {'''
+          insertion = '''    @Test
+    fun productionSections_keepBottomNavigationOutsideScrollableContent() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()
+        assertTrue(source.contains("modifier = Modifier.weight(1f).fillMaxWidth()"))
+        assertTrue(source.contains("M3BottomNav(section) { section = it }"))
+        assertFalse(source.contains("Modifier.align(Alignment.BottomCenter)"))
+        assertTrue(source.contains("bottom = (layout.gap * 2).dp"))
+    }
+
+'''
+          if marker not in text:
+              raise SystemExit('reference design test insertion marker missing')
+          text = text.replace(marker, insertion + marker, 1)
+          htest.write_text(text)
+          PY
+
+      - name: Commit project-wide UI polish
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-shot-ui-scale-polish.yml
+          git add app/src/main/java app/src/test/java
+          git commit -m "Redesign all screens for readable scale and safe scrolling"
+          git push origin HEAD:feature/connect-performance-credentials-0.5.7
