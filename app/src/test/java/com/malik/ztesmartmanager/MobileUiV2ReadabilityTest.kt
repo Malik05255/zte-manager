@@ -74,6 +74,6 @@ class MobileUiV2ReadabilityTest {
         val map = File("src/main/java/com/malik/ztesmartmanager/PulseNetworkMap.kt").readText()
         assertTrue(dashboard.contains("لا يُرسم إلا إذا كان موثقًا"))
         assertTrue(dashboard.contains("لن نعلن نجاح التغيير قبل أن يقرأه الراوتر مرة أخرى"))
-        assertTrue(map.contains("لا نرسم خطًا وهميًا"))
+        assertTrue(map.contains("لن نرسم خطًا وهميًا"))
     }
 }
