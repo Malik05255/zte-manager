@@ -11,8 +11,43 @@ class ZteHttpTransport(routerAddress: String) {
     private val baseUrl = normalizeBaseUrl(routerAddress)
     private val cookies = linkedMapOf<String, String>()
 
-    suspend fun getJson(path: String, params: Map<String, String>): JSONObject =
-        JSONObject(get(path, params))
+    /**
+     * ZTE firmware is inconsistent with a few large/list-valued fields when they are requested through
+     * `multi_data=1`: some builds return the field empty even though the same `cmd` works when requested
+     * alone. Keep the workaround at transport level so every snapshot reader benefits without opening a
+     * second login/session or fabricating data.
+     *
+     * Only read-only fields with observed sparse multi-data behaviour are retried. A successful single
+     * field response is merged verbatim into the original JSON object.
+     */
+    suspend fun getJson(path: String, params: Map<String, String>): JSONObject {
+        val primary = JSONObject(get(path, params))
+        if (params["multi_data"] != "1") return primary
+
+        val requested = params["cmd"].orEmpty()
+            .split(',')
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotBlank)
+            .toSet()
+
+        SPARSE_MULTI_DATA_FIELDS
+            .asSequence()
+            .filter { it in requested }
+            .filter { !hasUsableValue(primary, it) }
+            .forEach { field ->
+                val singleParams = params.toMutableMap().apply {
+                    this["cmd"] = field
+                    remove("multi_data")
+                }
+                val single = runCatching { JSONObject(get(path, singleParams)) }.getOrNull()
+                if (single != null && single.has(field) && !single.isNull(field)) {
+                    primary.put(field, single.opt(field))
+                }
+            }
+
+        return primary
+    }
 
     suspend fun get(path: String, params: Map<String, String>): String = withContext(Dispatchers.IO) {
         val query = encodeForm(params)
@@ -85,6 +120,22 @@ class ZteHttpTransport(routerAddress: String) {
             cleaned.startsWith("https://", ignoreCase = true) -> cleaned
             else -> "http://$cleaned"
         }
+    }
+
+    private fun hasUsableValue(json: JSONObject, field: String): Boolean {
+        if (!json.has(field) || json.isNull(field)) return false
+        val value = json.opt(field) ?: return false
+        if (value !is String) return true
+        val normalized = value.trim()
+        return normalized.isNotEmpty() && !normalized.equals("null", true)
+    }
+
+    companion object {
+        /**
+         * Read-only client lists observed to require an individual GET on some MC-series firmware.
+         * Never add mutating/control surfaces here.
+         */
+        private val SPARSE_MULTI_DATA_FIELDS = setOf("station_list", "lan_station_list")
     }
 }
 
