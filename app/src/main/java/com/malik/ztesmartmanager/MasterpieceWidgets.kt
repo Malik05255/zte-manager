@@ -32,7 +32,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -47,20 +46,20 @@ import com.malik.ztesmartmanager.core.smart.PlacementReading
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
-internal val HaiBg = Color(0xFFF4F8FD)
-internal val HaiCard = Color(0xFFFFFFFF)
-internal val HaiInk = Color(0xFF0A285C)
-internal val HaiMuted = Color(0xFF74839B)
-internal val HaiBlue = Color(0xFF1675F7)
-internal val HaiCyan = Color(0xFF19BCEB)
-internal val HaiGreen = Color(0xFF19B879)
-internal val HaiAmber = Color(0xFFF1A824)
-internal val HaiRed = Color(0xFFE55454)
-internal val HaiBorder = Color(0xFFDDE8F5)
-internal val HaiSoftBlue = Color(0xFFEBF4FF)
-internal val HaiSoftGreen = Color(0xFFEAF9F2)
-internal val HaiSoftPurple = Color(0xFFF3EEFF)
-internal val HaiSoftAmber = Color(0xFFFFF5E7)
+internal val MpBg = Color(0xFFF4F8FD)
+internal val MpCard = Color(0xFFFFFFFF)
+internal val MpInk = Color(0xFF0A285C)
+internal val MpMuted = Color(0xFF74839B)
+internal val MpBlue = Color(0xFF1675F7)
+internal val MpCyan = Color(0xFF19BCEB)
+internal val MpGreen = Color(0xFF19B879)
+internal val MpAmber = Color(0xFFF1A824)
+internal val MpRed = Color(0xFFE55454)
+internal val MpBorder = Color(0xFFDDE8F5)
+internal val MpSoftBlue = Color(0xFFEBF4FF)
+internal val MpSoftGreen = Color(0xFFEAF9F2)
+internal val MpSoftPurple = Color(0xFFF3EEFF)
+internal val MpSoftAmber = Color(0xFFFFF5E7)
 
 @Composable
 internal fun HaiSurface(
@@ -71,8 +70,8 @@ internal fun HaiSurface(
     Card(
         modifier = modifier.shadow(3.dp, RoundedCornerShape(24.dp)),
         shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = HaiCard),
-        border = BorderStroke(1.dp, HaiBorder)
+        colors = CardDefaults.cardColors(containerColor = MpCard),
+        border = BorderStroke(1.dp, MpBorder)
     ) {
         Box(Modifier.padding(padding.dp)) { content() }
     }
@@ -82,37 +81,37 @@ internal fun HaiSurface(
 internal fun HaiSectionTitle(title: String, subtitle: String? = null, badge: String? = null) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, color = HaiInk, fontWeight = FontWeight.Black, fontSize = 18.sp)
+            Text(title, color = MpInk, fontWeight = FontWeight.Black, fontSize = 18.sp)
             if (!subtitle.isNullOrBlank()) {
                 Spacer(Modifier.height(2.dp))
-                Text(subtitle, color = HaiMuted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, color = MpMuted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         if (!badge.isNullOrBlank()) {
             Text(
                 badge,
-                color = HaiBlue,
+                color = MpBlue,
                 fontWeight = FontWeight.Bold,
                 fontSize = 11.sp,
-                modifier = Modifier.clip(RoundedCornerShape(50)).background(HaiSoftBlue).padding(horizontal = 10.dp, vertical = 6.dp)
+                modifier = Modifier.clip(RoundedCornerShape(50)).background(MpSoftBlue).padding(horizontal = 10.dp, vertical = 6.dp)
             )
         }
     }
 }
 
 @Composable
-internal fun MetricPill(label: String, value: String, unit: String = "", accent: Color = HaiBlue) {
+internal fun MetricPill(label: String, value: String, unit: String = "", accent: Color = MpBlue) {
     Column(
         Modifier.clip(RoundedCornerShape(18.dp)).background(Color(0xFFF7FAFE)).padding(horizontal = 11.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(label, color = HaiMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = MpMuted, fontSize = 10.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(3.dp))
         Row(verticalAlignment = Alignment.Bottom) {
-            Text(value, color = HaiInk, fontSize = 16.sp, fontWeight = FontWeight.Black)
+            Text(value, color = MpInk, fontSize = 16.sp, fontWeight = FontWeight.Black)
             if (unit.isNotBlank()) {
                 Spacer(Modifier.width(3.dp))
-                Text(unit, color = HaiMuted, fontSize = 9.sp, modifier = Modifier.padding(bottom = 2.dp))
+                Text(unit, color = MpMuted, fontSize = 9.sp, modifier = Modifier.padding(bottom = 2.dp))
             }
         }
         Spacer(Modifier.height(6.dp))
@@ -143,13 +142,13 @@ internal fun ActionTile(
                 Modifier.size(38.dp).clip(CircleShape).background(Color.White.copy(alpha = .72f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text(glyph, fontSize = 20.sp, color = HaiInk, fontWeight = FontWeight.Black)
+                Text(glyph, fontSize = 20.sp, color = MpInk, fontWeight = FontWeight.Black)
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(title, color = if (enabled) HaiInk else HaiMuted, fontSize = 14.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                Text(title, color = if (enabled) MpInk else MpMuted, fontSize = 14.sp, fontWeight = FontWeight.Black, maxLines = 1)
                 Spacer(Modifier.height(2.dp))
-                Text(subtitle, color = HaiMuted, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, color = MpMuted, fontSize = 10.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -176,7 +175,7 @@ internal fun SpeedGauge(
                 style = Stroke(stroke, cap = StrokeCap.Round)
             )
             drawArc(
-                brush = Brush.sweepGradient(listOf(HaiBlue, HaiCyan, HaiGreen, HaiBlue)),
+                brush = Brush.sweepGradient(listOf(MpBlue, MpCyan, MpGreen, MpBlue)),
                 startAngle = 145f,
                 sweepAngle = 250f * fraction,
                 useCenter = false,
@@ -186,11 +185,11 @@ internal fun SpeedGauge(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 if (running) "…" else if (mbps == null) "—" else String.format("%.1f", animated),
-                color = HaiInk,
+                color = MpInk,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Black
             )
-            Text("Mb/s", color = HaiMuted, fontSize = 12.sp)
+            Text("Mb/s", color = MpMuted, fontSize = 12.sp)
         }
     }
 }
@@ -214,19 +213,19 @@ internal fun PlacementScore(reading: PlacementReading?, modifier: Modifier = Mod
             drawCircle(color.copy(alpha = .08f), radius = size.minDimension * .36f)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(if (reading == null) "—" else score.toString(), color = HaiInk, fontSize = 48.sp, fontWeight = FontWeight.Black)
+            Text(if (reading == null) "—" else score.toString(), color = MpInk, fontSize = 48.sp, fontWeight = FontWeight.Black)
             Text(reading?.score?.label ?: "ابدأ القياس", color = color, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            if (reading != null) Text("ثقة ${reading.confidence}%", color = HaiMuted, fontSize = 10.sp)
+            if (reading != null) Text("ثقة ${reading.confidence}%", color = MpMuted, fontSize = 10.sp)
         }
     }
 }
 
 internal fun qualityColor(score: Int): Color = when {
-    score >= 82 -> HaiGreen
-    score >= 58 -> HaiBlue
-    score >= 43 -> HaiAmber
-    score > 0 -> HaiRed
-    else -> HaiMuted
+    score >= 82 -> MpGreen
+    score >= 58 -> MpBlue
+    score >= 43 -> MpAmber
+    score > 0 -> MpRed
+    else -> MpMuted
 }
 
 internal fun placementGuidanceText(guidance: PlacementGuidance?): String = when (guidance) {
@@ -276,12 +275,12 @@ internal fun Double?.metric(decimals: Int = 1): String {
 internal fun StatusBanner(message: String) {
     if (message.isBlank()) return
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(HaiSoftBlue).padding(horizontal = 13.dp, vertical = 10.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(17.dp)).background(MpSoftBlue).padding(horizontal = 13.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(HaiBlue))
+        Box(Modifier.size(8.dp).clip(CircleShape).background(MpBlue))
         Spacer(Modifier.width(8.dp))
-        Text(message, color = HaiInk, fontSize = 11.sp, lineHeight = 16.sp, modifier = Modifier.weight(1f))
+        Text(message, color = MpInk, fontSize = 11.sp, lineHeight = 16.sp, modifier = Modifier.weight(1f))
     }
 }
 
@@ -292,12 +291,12 @@ internal fun EmptyState(title: String, body: String, glyph: String = "•") {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Box(Modifier.size(56.dp).clip(CircleShape).background(HaiSoftBlue), contentAlignment = Alignment.Center) {
-            Text(glyph, color = HaiBlue, fontSize = 26.sp, fontWeight = FontWeight.Black)
+        Box(Modifier.size(56.dp).clip(CircleShape).background(MpSoftBlue), contentAlignment = Alignment.Center) {
+            Text(glyph, color = MpBlue, fontSize = 26.sp, fontWeight = FontWeight.Black)
         }
         Spacer(Modifier.height(10.dp))
-        Text(title, color = HaiInk, fontWeight = FontWeight.Black, fontSize = 15.sp, textAlign = TextAlign.Center)
+        Text(title, color = MpInk, fontWeight = FontWeight.Black, fontSize = 15.sp, textAlign = TextAlign.Center)
         Spacer(Modifier.height(5.dp))
-        Text(body, color = HaiMuted, fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 16.sp)
+        Text(body, color = MpMuted, fontSize = 11.sp, textAlign = TextAlign.Center, lineHeight = 16.sp)
     }
 }
