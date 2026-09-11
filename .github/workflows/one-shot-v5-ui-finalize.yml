@@ -1,0 +1,98 @@
+name: One-shot V5 UI finalization
+
+on:
+  push:
+    branches:
+      - feature/connect-performance-credentials-0.5.7
+    paths:
+      - .github/workflows/one-shot-v5-ui-finalize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/connect-performance-credentials-0.5.7
+          fetch-depth: 0
+
+      - name: Finalize V5 UI and guards
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path('app/src/main/java/com/malik/ztesmartmanager')
+          home = root / 'HaiHomeDashboardV5.kt'
+          dashboard = root / 'HaiDashboardV5.kt'
+          arabic_test = Path('app/src/test/java/com/malik/ztesmartmanager/ArabicUiPolicyTest.kt')
+          mobile_test = Path('app/src/test/java/com/malik/ztesmartmanager/MobileUiV2ReadabilityTest.kt')
+
+          text = home.read_text()
+          text = text.replace('connected = radio.verified || status.contains("متصل")', 'connected = true')
+          text = text.replace('Text("Carrier Aggregation",', 'Text("تجميع الترددات (CA)",')
+          text = text.replace('fontSize = 9.sp', 'fontSize = 10.sp')
+          home.write_text(text)
+
+          text = dashboard.read_text()
+          text = text.replace('Text("Firmware: $it",', 'Text("إصدار البرنامج: $it",')
+          text = text.replace('Text("Hardware: $it",', 'Text("إصدار العتاد: $it",')
+          text = text.replace('fontSize = 9.sp', 'fontSize = 10.sp')
+          dashboard.write_text(text)
+
+          text = arabic_test.read_text()
+          text = text.replace('val dashboard = source("ArabicHaiDashboardV3.kt").readText()', 'val dashboard = source("HaiDashboardV5.kt").readText()')
+          text = text.replace('"غلاف الأمان يجب أن يستخدم واجهة V3 العربية المبسطة",\n            runtime.contains("ArabicHaiDashboardV3(")', '"غلاف الأمان يجب أن يستخدم واجهة V5 المعاد بناؤها",\n            runtime.contains("HaiDashboardV5(")')
+          arabic_test.write_text(text)
+
+          text = mobile_test.read_text()
+          text = text.replace('val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()', 'val source = File("src/main/java/com/malik/ztesmartmanager/HaiHomeDashboardV5.kt").readText() + "\\n" + File("src/main/java/com/malik/ztesmartmanager/HaiDashboardV5.kt").readText()', 1)
+          text = text.replace('assertTrue(sizing.contains("LocalDensity provides controlledDensity"))', 'assertTrue(!sizing.contains("LocalDensity provides controlledDensity"))\n        assertTrue(!sizing.contains("Density("))')
+          old = '''    @Test
+    fun rebuiltHomeV4_isTheProductionHomeAndUsesFixedReferenceRows() {
+        val entry = File("src/main/java/com/malik/ztesmartmanager/TargetHomeDashboard.kt").readText()
+        val home = File("src/main/java/com/malik/ztesmartmanager/HaiHomeDashboardV4.kt").readText()
+
+        assertTrue(entry.contains("HaiHomeDashboardV4("))
+        assertTrue(home.contains("verticalScroll(rememberScrollState())"))
+        assertTrue(home.contains("height(H4.HeroHeight)"))
+        assertTrue(home.contains("height(H4.MetricHeight)"))
+        assertTrue(home.contains("height(H4.MiddleRowHeight)"))
+        assertTrue(home.contains("height(H4.TowerRowHeight)"))
+        assertTrue(home.contains("height(H4.BottomRowHeight)"))
+        assertTrue(home.contains("H4Gauge("))
+        assertTrue(home.contains("H4MiniMap("))
+        assertTrue(home.contains("H4Bands("))
+        assertTrue(home.contains("H4Tools("))
+    }
+'''
+          new = '''    @Test
+    fun rebuiltHomeV5_isProductionHomeAndScrollsWithoutFixedReferenceRows() {
+        val shell = File("src/main/java/com/malik/ztesmartmanager/HaiDashboardV5.kt").readText()
+        val home = File("src/main/java/com/malik/ztesmartmanager/HaiHomeDashboardV5.kt").readText()
+
+        assertTrue(shell.contains("HaiHomeDashboardV5("))
+        assertTrue(home.contains("LazyColumn("))
+        assertTrue(home.contains("modifier = Modifier.weight(1f).fillMaxWidth()"))
+        assertTrue(home.contains("HaiSharedBottomNav("))
+        assertTrue(!home.contains("LocalDensity provides"))
+        assertTrue(!home.contains("H4.HeroHeight"))
+    }
+'''
+          text = text.replace(old, new)
+          text = text.replace('fun productionRoute_usesV3Only()', 'fun productionRoute_usesV5Only()')
+          text = text.replace('assertTrue(runtime.contains("ArabicHaiDashboardV3("))', 'assertTrue(runtime.contains("HaiDashboardV5("))')
+          mobile_test.write_text(text)
+          PY
+
+          rm -f .github/workflows/one-shot-v5-ui-finalize.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Finalize rebuilt V5 UI and responsive guards"
+          git push origin HEAD:feature/connect-performance-credentials-0.5.7
