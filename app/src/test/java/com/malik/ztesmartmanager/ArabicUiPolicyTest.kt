@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ArabicHaiDashboardV3.kt").readText()
+        val dashboard = source("ArabicHaiDashboardV4.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,12 +22,13 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة V3 العربية المبسطة",
-            runtime.contains("ArabicHaiDashboardV3(")
+            "غلاف الأمان يجب أن يستخدم واجهة V4 العربية المعتمدة",
+            runtime.contains("ArabicHaiDashboardV4(")
         )
         assertFalse(
             "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
-            runtime.contains("ArabicHaiDashboardV2(") ||
+            runtime.contains("ArabicHaiDashboardV3(") ||
+                runtime.contains("ArabicHaiDashboardV2(") ||
                 runtime.contains("ArabicHaiDashboard(") ||
                 runtime.contains("HaiAdaptiveDashboard(")
         )
@@ -95,13 +96,14 @@ class ArabicUiPolicyTest {
         )
 
         private val TECHNICAL_TOKENS = listOf(
-            "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "LTE", "NR", "NSA", "SA", "CA",
+            "ZTE Smart HAI", "HAI", "ZTE", "5G", "4G", "LTE", "NR", "NSA", "SA", "STC", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms"
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
             "ArabicHaiDashboard.kt",
             "ArabicHaiDashboardV2.kt",
+            "ArabicHaiDashboardV3.kt",
             "HaiAdaptiveDashboard.kt",
             "HaiPreviewMatrix.kt",
             "PremiumDashboard.kt",
