@@ -101,7 +101,7 @@ class ArabicUiPolicyTest {
 
         private val TECHNICAL_TOKENS = listOf(
             "ZTE Smart HAI", "HAI Network", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
-            "HAI", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
+            "HAI", "H", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
             "STC", "Mobily", "Zain", "Wi‑Fi", "LAN", "Ping", "Jitter", "Band", "IP", "Firmware", "read-back", "eNB"
         )
