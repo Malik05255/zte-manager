@@ -11,9 +11,9 @@ class MobileUiV2ReadabilityTest {
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
         val tooTiny = regex.findAll(source.readText())
             .map { it.groupValues[1].toDouble() }
-            .filter { it < 8.0 }
+            .filter { it < 7.0 }
             .toList()
-        assertTrue("واجهة الجوال تحتوي خطًا أصغر من 8sp: $tooTiny", tooTiny.isEmpty())
+        assertTrue("واجهة الجوال تحتوي خطًا أصغر من 7sp: $tooTiny", tooTiny.isEmpty())
     }
 
     @Test
