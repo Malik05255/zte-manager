@@ -9,7 +9,7 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("MasterpieceDashboard.kt").readText()
+        val dashboard = source("ReferenceExactDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
@@ -22,8 +22,8 @@ class ArabicUiPolicyTest {
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة Masterpiece الجديدة",
-            runtime.contains("MasterpieceDashboard(")
+            "غلاف الأمان يجب أن يستخدم واجهة المرجع الجديدة",
+            runtime.contains("ReferenceExactDashboard(")
         )
         assertFalse(
             "لا يجوز إعادة واجهات HAI القديمة إلى مسار الإنتاج",
@@ -100,10 +100,10 @@ class ArabicUiPolicyTest {
         )
 
         private val TECHNICAL_TOKENS = listOf(
-            "ZTE Smart HAI", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
+            "ZTE Smart HAI", "HAI Network", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
             "HAI", "ZTE", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
             "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
-            "STC", "Mobily", "Zain"
+            "STC", "Mobily", "Zain", "Wi‑Fi", "LAN", "Ping", "Jitter", "Band", "IP", "Firmware", "read-back", "eNB"
         )
 
         private val LEGACY_INACTIVE_UI = setOf(
@@ -123,7 +123,8 @@ class ArabicUiPolicyTest {
             "HomeActivity.kt",
             "MainActivity.kt",
             "ReferenceDashboard.kt",
-            "ReferenceMainActivity.kt"
+            "ReferenceMainActivity.kt",
+            "MasterpieceDashboard.kt"
         )
     }
 }
