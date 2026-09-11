@@ -9,7 +9,7 @@ class MobileUiV2ReadabilityTest {
     @Test
     fun productionDashboard_keepsMicroLabelsReadable() {
         val sources = listOf(
-            File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt"),
+            File("src/main/java/com/malik/ztesmartmanager/ImmersiveDashboard.kt"),
             File("src/main/java/com/malik/ztesmartmanager/MasterpieceWidgets.kt"),
             File("src/main/java/com/malik/ztesmartmanager/MasterpieceMap.kt")
         )
@@ -34,27 +34,30 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun productionDashboard_usesAdaptiveLayoutAndMaterialTouchTargets() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt").readText()
-        assertTrue(source.contains("BoxWithConstraints"))
-        assertTrue(source.contains("NavigationBar("))
-        assertTrue(source.contains("Button("))
-        assertTrue(source.contains("OutlinedButton("))
+    fun immersiveDashboard_hasRealMotionAndHorizontalDiscovery() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/ImmersiveDashboard.kt").readText()
+        assertTrue(source.contains("rememberInfiniteTransition"))
+        assertTrue(source.contains("animateFloatAsState"))
+        assertTrue(source.contains("animateColorAsState"))
+        assertTrue(source.contains("LazyRow("))
+        assertTrue(source.contains("shadow("))
     }
 
     @Test
-    fun homeDashboard_isScrollableAndDoesNotForceEverythingIntoViewport() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt").readText()
-        assertTrue(source.contains("private fun ReferenceHome"))
+    fun homeDashboard_isScrollableAndAvoidsDenseTwoColumnPhoneLayout() {
+        val source = File("src/main/java/com/malik/ztesmartmanager/ImmersiveDashboard.kt").readText()
+        assertTrue(source.contains("private fun IxHome"))
         assertTrue(source.contains("LazyColumn("))
-        assertTrue(source.contains("contentPadding = PaddingValues"))
-        assertTrue(source.contains("verticalArrangement = Arrangement.spacedBy"))
+        assertTrue(source.contains("verticalArrangement = Arrangement.spacedBy(17.dp)"))
+        assertTrue(source.contains("IxSpeedCard(performance, speedBusy, onSpeedTest)"))
+        assertTrue(source.contains("IxModeStrip(snapshot, controlBusy, onMode)"))
     }
 
     @Test
-    fun productionRoute_usesReferenceExactDashboard() {
+    fun productionRoute_usesImmersiveDashboard() {
         val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
-        assertTrue(runtime.contains("ReferenceExactDashboard("))
+        assertTrue(runtime.contains("ImmersiveDashboard("))
+        assertTrue(!runtime.contains("ReferenceExactDashboard("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV6("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV5("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV4("))
@@ -65,7 +68,7 @@ class MobileUiV2ReadabilityTest {
 
     @Test
     fun productionDashboard_keepsTruthFirstLanguage() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ReferenceExactDashboard.kt").readText()
+        val source = File("src/main/java/com/malik/ztesmartmanager/ImmersiveDashboard.kt").readText()
         val required = listOf(
             "بدون تخمين",
             "لا نختلق إحداثيات",
