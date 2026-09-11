@@ -8,7 +8,7 @@ class MobileUiV2ReadabilityTest {
 
     @Test
     fun productionDashboard_hasNoTinyDirectFontSizes() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()
+        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV4.kt").readText()
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
         val tiny = regex.findAll(source)
             .map { it.groupValues[1].toDouble() }
@@ -29,22 +29,23 @@ class MobileUiV2ReadabilityTest {
 
     @Test
     fun primaryTouchTargets_areAtLeastFiftyDp() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()
-        assertTrue(source.contains("private fun M3Primary"))
+        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV4.kt").readText()
+        assertTrue(source.contains("private fun V4Primary"))
         assertTrue(source.contains("modifier.height(50.dp)"))
     }
 
     @Test
-    fun productionRoute_usesV3Only() {
+    fun productionRoute_usesV4Only() {
         val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
-        assertTrue(runtime.contains("ArabicHaiDashboardV3("))
+        assertTrue(runtime.contains("ArabicHaiDashboardV4("))
+        assertTrue(!runtime.contains("ArabicHaiDashboardV3("))
         assertTrue(!runtime.contains("ArabicHaiDashboardV2("))
         assertTrue(!runtime.contains("ArabicHaiDashboard("))
     }
 
     @Test
     fun minimalDashboard_doesNotRestoreExplanatorySectionSubtitles() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV3.kt").readText()
+        val source = File("src/main/java/com/malik/ztesmartmanager/ArabicHaiDashboardV4.kt").readText()
         val banned = listOf(
             "أكثر الأدوات استخدامًا",
             "الحالة النشطة منفصلة عن الترددات المختارة",
