@@ -139,7 +139,7 @@ internal fun RealNetworkMap(
                 Spacer(Modifier.size(6.dp))
                 Text("خريطة مباشرة", color = MpInk, fontWeight = FontWeight.Black)
             }
-            Text("OpenStreetMap / OpenFreeMap", color = MpMuted, fontSize = 9.sp)
+            Text("خرائط OpenStreetMap • محرك OpenFreeMap", color = MpMuted, fontSize = 9.sp)
         }
 
         Column(
