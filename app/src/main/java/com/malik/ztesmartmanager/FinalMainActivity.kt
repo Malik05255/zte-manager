@@ -42,8 +42,10 @@ import com.malik.ztesmartmanager.core.tower.TowerMatch
 import com.malik.ztesmartmanager.core.tower.TowerRecommendationEngine
 import com.malik.ztesmartmanager.core.tower.TowerTarget
 import com.malik.ztesmartmanager.core.tower.VerifiedTowerLockCoordinator
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class FinalMainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -107,15 +109,19 @@ private fun FinalManagerApp() {
     val credentialStore = remember(context) { SecureRouterCredentialStore(context) }
     var rememberPassword by rememberSaveable { mutableStateOf(false) }
     var credentialsLoaded by remember { mutableStateOf(false) }
+    var autoDetectGateway by remember { mutableStateOf(false) }
     var latestSafetyBackup by remember { mutableStateOf<RouterSettingsBackup?>(null) }
     val scope = rememberCoroutineScope()
 
     androidx.compose.runtime.LaunchedEffect(credentialStore) {
         if (!credentialsLoaded) {
-            credentialStore.load()?.let { saved ->
+            val saved = withContext(Dispatchers.IO) { credentialStore.load() }
+            if (saved != null) {
                 routerAddress = saved.routerAddress
                 password = saved.password
                 rememberPassword = true
+            } else {
+                autoDetectGateway = true
             }
             credentialsLoaded = true
         }
@@ -155,8 +161,9 @@ private fun FinalManagerApp() {
             status = "جاري الاتصال..."
             runCatching {
                 val newClient = ZteRouterClient(routerAddress)
-                val profile = newClient.login(password)
-                val first = newClient.readSnapshot()
+                val bootstrap = newClient.loginAndReadSnapshot(password)
+                val profile = bootstrap.profile
+                val first = bootstrap.snapshot
                 val newTowerEngine = TowerLockEngine(newClient)
                 client = newClient
                 towerEngine = newTowerEngine
@@ -174,9 +181,8 @@ private fun FinalManagerApp() {
                 poorSamples = 0
 
                 if (rememberPassword) {
-                    if (!credentialStore.save(routerAddress, password)) {
-                        operationMessage = "تم الاتصال، لكن تعذر حفظ كلمة المرور بشكل آمن على هذا الجهاز"
-                    }
+                    val saved = withContext(Dispatchers.IO) { credentialStore.save(routerAddress, password) }
+                    if (!saved) operationMessage = "تم الاتصال، لكن تعذر حفظ كلمة المرور بشكل آمن على هذا الجهاز"
                 } else {
                     credentialStore.clear()
                 }
@@ -251,18 +257,18 @@ private fun FinalManagerApp() {
             }
 
             operationMessage = if (manual) "جاري اختبار أفضل إعداد موثّق..." else "رصدنا تدهورًا مستمرًا؛ بدأ التحسين الموثّق..."
-            runCatching {
-                SmartBandOptimizer(connected).optimizeOnce(smartGoal) { operationMessage = it }
-            }.onSuccess { report ->
-                smartReport = report
-                operationMessage = report.message
-                smartBaseline = report.best.qualityScore
-                lastSmartRun = SystemClock.elapsedRealtime()
-                refreshAfterControl(connected)
-            }.onFailure {
-                operationMessage = "تعذر التحسين: ${it.message.orEmpty()}"
-                lastSmartRun = SystemClock.elapsedRealtime()
-            }
+            runCatching { SmartBandOptimizer(connected).optimizeOnce(smartGoal) { operationMessage = it } }
+                .onSuccess { report ->
+                    smartReport = report
+                    operationMessage = report.message
+                    smartBaseline = report.best.qualityScore
+                    lastSmartRun = SystemClock.elapsedRealtime()
+                    refreshAfterControl(connected)
+                }
+                .onFailure {
+                    operationMessage = "تعذر التحسين: ${it.message.orEmpty()}"
+                    lastSmartRun = SystemClock.elapsedRealtime()
+                }
             poorSamples = 0
             smartBusy = false
         }
@@ -327,7 +333,6 @@ private fun FinalManagerApp() {
                 towerTarget = null
                 towerGuardEnabled = false
                 towerGuardStatus = null
-
                 operationMessage = if (result.writeAttempted) {
                     val rollback = runCatching { connected.restoreSettings(backup) }.getOrNull()
                     if (rollback?.verified != true) guardStateStore.clear(routerAddress)
@@ -336,9 +341,7 @@ private fun FinalManagerApp() {
                         rollback != null -> "${result.message} • محاولة الرجوع: ${rollback.message}"
                         else -> "${result.message} • تعذر تنفيذ مسار الرجوع؛ راجع الإعدادات قبل محاولة جديدة"
                     }
-                } else {
-                    result.message
-                }
+                } else result.message
             }
 
             refreshAfterControl(connected)
@@ -360,17 +363,13 @@ private fun FinalManagerApp() {
             runCatching { connected.readSnapshot() }
                 .onSuccess { latest ->
                     snapshot = latest
-
                     if (towerGuardEnabled && towerTarget != null && guardEngine != null) {
                         runCatching { guardEngine.guardOnce(towerTarget!!, latest) }
                             .onSuccess { guard ->
                                 towerGuardStatus = guard
-                                if (guard.repaired || guard.match == TowerMatch.RADIO_MATCH_ID_CHANGED) {
-                                    operationMessage = guard.message
-                                }
+                                if (guard.repaired || guard.match == TowerMatch.RADIO_MATCH_ID_CHANGED) operationMessage = guard.message
                             }
                     }
-
                     if (placementMode) {
                         placementReading = placementEngine.add(latest)
                     } else if (smartMode) {
@@ -398,6 +397,7 @@ private fun FinalManagerApp() {
                 rememberPassword = checked
                 if (!checked) credentialStore.clear()
             },
+            autoDetectGateway = autoDetectGateway,
             status = status,
             busy = connectBusy,
             onConnect = ::connect
@@ -447,14 +447,27 @@ private fun FinalManagerApp() {
         onSpeedTest = {
             if (!speedBusy) scope.launch {
                 speedBusy = true
-                operationMessage = "جاري قياس السرعة الفعلية..."
-                runCatching { performanceProbe.measure(includeDownload = true) }
+                operationMessage = "جاري قياس سرعة التنزيل والرفع الفعلية..."
+                runCatching { performanceProbe.measure(includeDownload = true, includeUpload = true) }
                     .onSuccess {
                         lastPerformance = it
-                        operationMessage = "اكتمل القياس الفعلي"
+                        operationMessage = "اكتمل قياس السرعة الفعلي"
                     }
                     .onFailure { operationMessage = "تعذر القياس: ${it.message.orEmpty()}" }
                 speedBusy = false
+            }
+        },
+        onRefreshSnapshot = {
+            if (!controlBusy && !speedBusy && !scanBusy && !smartBusy) scope.launch {
+                operationMessage = "جاري تحديث البيانات من الراوتر..."
+                runCatching { connected.readSnapshot() }
+                    .onSuccess { latest ->
+                        snapshot = latest
+                        selectedLte = premiumCurrentLteBands(latest)
+                        selectedNr = premiumCurrentNrBands(latest)
+                        operationMessage = "تم تحديث البيانات من الراوتر"
+                    }
+                    .onFailure { operationMessage = "تعذر تحديث البيانات: ${it.message.orEmpty()}" }
             }
         },
         onPlacementToggle = {
@@ -468,36 +481,62 @@ private fun FinalManagerApp() {
         },
         onSmartGoalChange = { smartGoal = it },
         onOptimizeNow = { runSmartOptimization(true) },
-        onLteToggle = { band -> selectedLte = premiumToggleBand(selectedLte, band) },
-        onNrToggle = { band -> selectedNr = premiumToggleBand(selectedNr, band) },
+        onLteToggle = { band ->
+            if (band in capabilities.supportedLteBands) selectedLte = premiumToggleBand(selectedLte, band)
+            else operationMessage = "تم تجاهل B$band: التردد غير مدعوم لهذا الـProfile"
+        },
+        onNrToggle = { band ->
+            if (band in capabilities.supportedNrBands) selectedNr = premiumToggleBand(selectedNr, band)
+            else operationMessage = "تم تجاهل N$band: التردد غير مدعوم لهذا الـProfile"
+        },
         onApplyLte = {
             if (selectedLte.isNotEmpty() && !controlBusy) scope.launch {
+                val requested = selectedLte.toSet()
                 controlBusy = true
-                val backup = captureSafetyBackup(
-                    connected,
-                    { it.canRestoreLteBands },
-                    "لا يوجد LTE mask أصلي موثوق يمكن استعادته؛ لم يتم تغيير الترددات"
-                )
-                if (backup != null) {
-                    operationMessage = connected.setLteBands(selectedLte).message
-                    refreshAfterControl(connected)
+                try {
+                    val backup = captureSafetyBackup(
+                        connected,
+                        { it.canRestoreLteBands },
+                        "لا يوجد LTE mask أصلي موثوق يمكن استعادته؛ لم يتم تغيير الترددات"
+                    )
+                    if (backup != null) {
+                        val result = runCatching { connected.setLteBands(requested) }.getOrElse {
+                            operationMessage = "تعذر تطبيق ترددات 4G: ${it.message.orEmpty()}"
+                            return@launch
+                        }
+                        operationMessage = result.message
+                        refreshAfterControl(connected)
+                    }
+                } catch (error: Exception) {
+                    operationMessage = "تعذر تطبيق ترددات 4G: ${error.message.orEmpty()}"
+                } finally {
+                    controlBusy = false
                 }
-                controlBusy = false
             }
         },
         onApplyNr = {
             if (selectedNr.isNotEmpty() && !controlBusy) scope.launch {
+                val requested = selectedNr.toSet()
                 controlBusy = true
-                val backup = captureSafetyBackup(
-                    connected,
-                    { it.canRestoreNrBands },
-                    "قناع 5G الأصلي غير متاح بشكل يسمح باستعادته دون تخمين"
-                )
-                if (backup != null) {
-                    operationMessage = connected.setNrBands(selectedNr).message
-                    refreshAfterControl(connected)
+                try {
+                    val backup = captureSafetyBackup(
+                        connected,
+                        { it.canRestoreNrBands },
+                        "قناع 5G الأصلي غير متاح بشكل يسمح باستعادته دون تخمين"
+                    )
+                    if (backup != null) {
+                        val result = runCatching { connected.setNrBands(requested) }.getOrElse {
+                            operationMessage = "تعذر تطبيق ترددات 5G: ${it.message.orEmpty()}"
+                            return@launch
+                        }
+                        operationMessage = result.message
+                        refreshAfterControl(connected)
+                    }
+                } catch (error: Exception) {
+                    operationMessage = "تعذر تطبيق ترددات 5G: ${error.message.orEmpty()}"
+                } finally {
+                    controlBusy = false
                 }
-                controlBusy = false
             }
         },
         onSetNetworkMode = { mode ->
@@ -595,9 +634,7 @@ private fun FinalManagerApp() {
                 } else if (!controlBusy) {
                     scope.launch {
                         operationMessage = "إعادة التحقق من القفل والخلية قبل تشغيل حارس البرج..."
-                        val lockReadBack = runCatching {
-                            connected.readRaw(setOf("lte_pci_lock", "lte_earfcn_lock"))
-                        }.getOrNull()
+                        val lockReadBack = runCatching { connected.readRaw(setOf("lte_pci_lock", "lte_earfcn_lock")) }.getOrNull()
                         val latest = runCatching { connected.readSnapshot() }.getOrNull()
                         if (latest != null) snapshot = latest
                         val liveMatch = latest?.let { engine.compare(target, it) }
@@ -622,12 +659,7 @@ private fun FinalManagerApp() {
                         } else if (decision.enableGuard) {
                             guardStateStore.save(candidateState)
                         } else if (decision.target != null) {
-                            guardStateStore.saveVerifiedTarget(
-                                routerAddress,
-                                connected.profile.id,
-                                decision.target,
-                                false
-                            )
+                            guardStateStore.saveVerifiedTarget(routerAddress, connected.profile.id, decision.target, false)
                         } else {
                             guardStateStore.setGuardRequested(routerAddress, false)
                         }
@@ -645,9 +677,7 @@ private fun FinalManagerApp() {
                         }
                         operationMessage = if (decision.enableGuard) {
                             "${decision.message} • المراقبة تعمل فقط أثناء تشغيل التطبيق"
-                        } else {
-                            decision.message
-                        }
+                        } else decision.message
                     }
                 }
             }
@@ -659,12 +689,11 @@ private fun FinalManagerApp() {
                 towerGuardEnabled = false
                 guardStateStore.setGuardRequested(routerAddress, false)
                 operationMessage = "جاري استعادة آخر نسخة أمان والتحقق..."
-                val report = runCatching { connected.restoreSettings(backup) }
-                    .getOrElse {
-                        operationMessage = "تعذر تنفيذ الاستعادة: ${it.message.orEmpty()}"
-                        controlBusy = false
-                        return@launch
-                    }
+                val report = runCatching { connected.restoreSettings(backup) }.getOrElse {
+                    operationMessage = "تعذر تنفيذ الاستعادة: ${it.message.orEmpty()}"
+                    controlBusy = false
+                    return@launch
+                }
                 operationMessage = report.message
                 if (report.verified) {
                     towerTarget = null

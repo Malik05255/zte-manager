@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -32,6 +31,12 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -41,12 +46,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.malik.ztesmartmanager.core.network.AndroidRouterGatewayDetector
+import com.malik.ztesmartmanager.core.presentation.RouterLoginGatewayPolicy
+import com.malik.ztesmartmanager.core.storage.SecureRouterCredentialStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private val LoginBgTop = Color(0xFFF8FAFD)
 private val LoginBgBottom = Color(0xFFEDF3F8)
@@ -67,142 +79,186 @@ fun ZteRouterLoginScreen(
     onPasswordChange: (String) -> Unit,
     rememberPassword: Boolean,
     onRememberPasswordChange: (Boolean) -> Unit,
+    autoDetectGateway: Boolean,
     status: String,
     busy: Boolean,
     onConnect: () -> Unit
 ) {
+    val context = LocalContext.current
+    val credentialStore = remember(context) { SecureRouterCredentialStore(context) }
+    var userEditedAddress by rememberSaveable { mutableStateOf(false) }
+    var credentialSaveFailed by remember { mutableStateOf(false) }
     val isError = status.startsWith("تعذر") || status.contains("رفض") || status.contains("خطأ")
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(LoginBgTop, LoginBgBottom)))
-            .statusBarsPadding()
-            .navigationBarsPadding()
-            .imePadding()
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 18.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            RouterMark()
-            Spacer(Modifier.height(14.dp))
-
-            Text(
-                text = "ZTE Smart HAI",
-                color = LoginInk,
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Black
+    LaunchedEffect(autoDetectGateway, userEditedAddress) {
+        if (!autoDetectGateway || userEditedAddress) return@LaunchedEffect
+        val detected = withContext(Dispatchers.IO) { AndroidRouterGatewayDetector.detect(context) }
+        if (RouterLoginGatewayPolicy.shouldAdoptDetectedGateway(
+                currentAddress = routerAddress,
+                detectedGateway = detected,
+                userEditedAddress = userEditedAddress
             )
+        ) {
+            onRouterAddressChange(detected!!)
+        }
+    }
 
-            Spacer(Modifier.height(22.dp))
+    LaunchedEffect(rememberPassword, routerAddress, password) {
+        if (rememberPassword && routerAddress.isNotBlank() && password.isNotBlank()) {
+            delay(250)
+            credentialSaveFailed = !withContext(Dispatchers.IO) {
+                credentialStore.save(routerAddress, password)
+            }
+        } else if (!rememberPassword) {
+            credentialSaveFailed = false
+        }
+    }
 
-            Card(
+    HaiUiScaleProvider {
+        val ui = LocalHaiUiMetrics.current
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(LoginBgTop, LoginBgBottom)))
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .imePadding()
+        ) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 460.dp)
-                    .shadow(14.dp, RoundedCornerShape(26.dp)),
-                shape = RoundedCornerShape(26.dp),
-                colors = CardDefaults.cardColors(containerColor = LoginCard),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White)
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = ui.pagePadding + 8.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Column(Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
-                    OutlinedTextField(
-                        value = routerAddress,
-                        onValueChange = onRouterAddressChange,
-                        label = { Text("عنوان الراوتر", fontSize = 14.sp) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                        singleLine = true,
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = loginFieldColors()
-                    )
+                RouterMark()
+                Spacer(Modifier.height(14.dp))
 
-                    Spacer(Modifier.height(12.dp))
+                Text(
+                    text = "ZTE Smart HAI",
+                    color = LoginInk,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Black
+                )
 
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = onPasswordChange,
-                        label = { Text("كلمة المرور", fontSize = 14.sp) },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = loginFieldColors()
-                    )
+                Spacer(Modifier.height(22.dp))
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = rememberPassword,
-                            onCheckedChange = onRememberPasswordChange,
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .widthIn(max = 460.dp)
+                        .shadow(14.dp, RoundedCornerShape(26.dp)),
+                    shape = RoundedCornerShape(26.dp),
+                    colors = CardDefaults.cardColors(containerColor = LoginCard),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White)
+                ) {
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 22.dp)) {
+                        OutlinedTextField(
+                            value = routerAddress,
+                            onValueChange = {
+                                userEditedAddress = true
+                                onRouterAddressChange(it)
+                            },
+                            label = { Text("عنوان الراوتر", fontSize = 14.sp) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                            singleLine = true,
                             enabled = !busy,
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = LoginBlue,
-                                uncheckedColor = LoginMuted
-                            )
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = loginFieldColors()
                         )
-                        Text(
-                            text = "حفظ كلمة المرور",
-                            color = LoginInk,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
 
-                    Spacer(Modifier.height(12.dp))
+                        Spacer(Modifier.height(12.dp))
 
-                    Button(
-                        onClick = onConnect,
-                        enabled = !busy && password.isNotBlank() && routerAddress.isNotBlank(),
-                        modifier = Modifier.fillMaxWidth().height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = LoginBlue,
-                            disabledContainerColor = Color(0xFFAFC4DF)
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = onPasswordChange,
+                            label = { Text("كلمة المرور", fontSize = 14.sp) },
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            enabled = !busy,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = loginFieldColors()
                         )
-                    ) {
-                        Text(
-                            text = if (busy) "جاري الاتصال…" else "اتصال",
-                            color = Color.White,
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
 
-                    if (status.isNotBlank() && status != "غير متصل" && status != "جاري الاتصال...") {
-                        Spacer(Modifier.height(14.dp))
-                        Box(
-                            Modifier
+                        Row(
+                            modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(if (isError) Color(0xFFFFF3F3) else Color(0xFFF1F7FF))
-                                .border(
-                                    1.dp,
-                                    if (isError) Color(0xFFFFD6D6) else Color(0xFFD8E8FF),
-                                    RoundedCornerShape(14.dp)
+                                .padding(top = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = rememberPassword,
+                                onCheckedChange = onRememberPasswordChange,
+                                enabled = !busy,
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = LoginBlue,
+                                    uncheckedColor = LoginMuted
                                 )
-                                .padding(12.dp)
+                            )
+                            Text(
+                                text = "حفظ كلمة المرور",
+                                color = LoginInk,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        if (credentialSaveFailed) {
+                            Text(
+                                text = "تعذر حفظ كلمة المرور على هذا الجهاز",
+                                color = LoginError,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                        }
+
+                        Spacer(Modifier.height(12.dp))
+
+                        Button(
+                            onClick = onConnect,
+                            enabled = !busy && password.isNotBlank() && routerAddress.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = LoginBlue,
+                                disabledContainerColor = Color(0xFFAFC4DF)
+                            )
                         ) {
                             Text(
-                                text = status,
-                                color = if (isError) LoginError else LoginBlueDark,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp,
-                                fontWeight = FontWeight.Medium,
-                                textAlign = TextAlign.Start
+                                text = if (busy) "جاري الاتصال…" else "اتصال",
+                                color = Color.White,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold
                             )
+                        }
+
+                        if (status.isNotBlank() && status != "غير متصل" && status != "جاري الاتصال...") {
+                            Spacer(Modifier.height(14.dp))
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(if (isError) Color(0xFFFFF3F3) else Color(0xFFF1F7FF))
+                                    .border(
+                                        1.dp,
+                                        if (isError) Color(0xFFFFD6D6) else Color(0xFFD8E8FF),
+                                        RoundedCornerShape(14.dp)
+                                    )
+                                    .padding(12.dp)
+                            ) {
+                                Text(
+                                    text = status,
+                                    color = if (isError) LoginError else LoginBlueDark,
+                                    fontSize = 14.sp,
+                                    lineHeight = 20.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    textAlign = TextAlign.Start
+                                )
+                            }
                         }
                     }
                 }

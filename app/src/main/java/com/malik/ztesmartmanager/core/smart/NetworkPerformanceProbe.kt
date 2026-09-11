@@ -12,18 +12,24 @@ data class NetworkPerformance(
     val latencyMs: Double?,
     val jitterMs: Double?,
     val packetLossPercent: Double?,
-    val downloadMbps: Double?
+    val downloadMbps: Double?,
+    val uploadMbps: Double? = null,
+    val measuredAtEpochMs: Long? = null
 )
 
 /**
- * Lightweight internet probe used only while Smart Mode is evaluating a candidate.
- * It never uploads user content. Download probing is deliberately small to avoid wasting data.
+ * Lightweight internet probe. It never uploads user content: upload testing sends only generated
+ * in-memory bytes. Smart optimization keeps upload disabled unless the caller explicitly asks for it.
  */
 class NetworkPerformanceProbe(
     private val latencyUrl: String = "https://connectivitycheck.gstatic.com/generate_204",
-    private val downloadUrl: String = "https://speed.cloudflare.com/__down?bytes=750000"
+    private val downloadUrl: String = "https://speed.cloudflare.com/__down?bytes=750000",
+    private val uploadUrl: String = "https://speed.cloudflare.com/__up"
 ) {
-    suspend fun measure(includeDownload: Boolean = true): NetworkPerformance = withContext(Dispatchers.IO) {
+    suspend fun measure(
+        includeDownload: Boolean = true,
+        includeUpload: Boolean = false
+    ): NetworkPerformance = withContext(Dispatchers.IO) {
         val latencySamples = mutableListOf<Double>()
         var failures = 0
 
@@ -38,12 +44,15 @@ class NetworkPerformanceProbe(
         } else null
         val loss = failures * 25.0
         val download = if (includeDownload) runCatching { downloadMbps() }.getOrNull() else null
+        val upload = if (includeUpload) runCatching { uploadMbps() }.getOrNull() else null
 
         NetworkPerformance(
             latencyMs = latency?.let(::round1),
             jitterMs = jitter?.let(::round1),
             packetLossPercent = loss,
-            downloadMbps = download?.let(::round1)
+            downloadMbps = download?.let(::round1),
+            uploadMbps = upload?.let(::round1),
+            measuredAtEpochMs = System.currentTimeMillis()
         )
     }
 
@@ -103,5 +112,37 @@ class NetworkPerformanceProbe(
         return (bytes * 8.0 / 1_000_000.0) / seconds
     }
 
+    private fun uploadMbps(): Double {
+        val payload = ByteArray(UPLOAD_BYTES) { index -> ((index * 31 + 17) and 0xFF).toByte() }
+        val connection = (URL(uploadUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 5_000
+            readTimeout = 8_000
+            requestMethod = "POST"
+            doOutput = true
+            useCaches = false
+            instanceFollowRedirects = true
+            setFixedLengthStreamingMode(payload.size)
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Content-Type", "application/octet-stream")
+            setRequestProperty("User-Agent", "ZTE-Smart-Manager/0.1")
+        }
+        val start = System.nanoTime()
+        try {
+            connection.outputStream.buffered().use { output -> output.write(payload) }
+            val code = connection.responseCode
+            if (code !in 200..299) error("Upload probe HTTP $code")
+            runCatching { connection.inputStream.close() }
+        } finally {
+            connection.disconnect()
+        }
+        val seconds = (System.nanoTime() - start) / 1_000_000_000.0
+        if (seconds <= 0.0) error("Invalid upload sample")
+        return (payload.size * 8.0 / 1_000_000.0) / seconds
+    }
+
     private fun round1(value: Double): Double = (value * 10.0).roundToInt() / 10.0
+
+    private companion object {
+        const val UPLOAD_BYTES = 500_000
+    }
 }

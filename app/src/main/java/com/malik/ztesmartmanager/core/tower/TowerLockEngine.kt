@@ -43,7 +43,9 @@ data class NearbyCell(
     val presencePercent: Int = 100,
     val stabilityScore: Int? = null,
     val evidenceScore: Int? = null,
-    val confidence: CellConfidence? = null
+    val confidence: CellConfidence? = null,
+    val cellId: Long? = null,
+    val areaCode: Int? = null
 )
 
 /**
@@ -286,11 +288,38 @@ class TowerLockEngine(
                         arfcn = arfcn,
                         rsrp = signal(item, "rsrp", -170.0, -35.0),
                         rsrq = signal(item, "rsrq", -40.0, 0.0),
-                        sinr = signal(item, "sinr", -30.0, 60.0)
+                        sinr = signal(item, "sinr", -30.0, 60.0),
+                        cellId = firstCellId(item),
+                        areaCode = firstAreaCode(item)
                     )
                 )
             }
         }
+    }
+
+    private fun firstCellId(item: JSONObject): Long? =
+        listOf("cell_id", "cellid", "eci", "nci")
+            .asSequence()
+            .mapNotNull { key ->
+                ZteRadioIdParser.parseLong(
+                    item.optString(key),
+                    encoding = client.profile.radioIdEncoding
+                )
+            }
+            .firstOrNull { it > 0 }
+
+    private fun firstAreaCode(item: JSONObject): Int? =
+        listOf("tac", "lac", "area_code")
+            .asSequence()
+            .mapNotNull { key -> parseAreaCodeToken(item.optString(key)) }
+            .firstOrNull()
+
+    private fun parseAreaCodeToken(value: String?): Int? {
+        val text = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val explicitHex = text.startsWith("0x", true) || text.any { it.lowercaseChar() in 'a'..'f' }
+        val token = text.removePrefix("0x").removePrefix("0X")
+        val parsed = if (explicitHex) token.toIntOrNull(16) else token.toIntOrNull(10)
+        return parsed?.takeIf { it >= 0 }
     }
 
     private fun positiveInt(item: JSONObject, key: String): Int? =

@@ -19,6 +19,10 @@ data class SavedRouterCredential(
 /**
  * Stores the router administration password encrypted with an Android Keystore key.
  * The password is never written to SharedPreferences as plaintext.
+ *
+ * save() is called from Dispatchers.IO by the login UI. The successful write is committed before
+ * returning true. clear() intentionally uses apply() because it may be triggered directly by a UI
+ * checkbox and removing an already-encrypted credential does not need to block the main thread.
  */
 class SecureRouterCredentialStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -37,7 +41,12 @@ class SecureRouterCredentialStore(context: Context) {
         )
         val plaintext = cipher.doFinal(Base64.decode(encrypted, Base64.NO_WRAP))
         val password = String(plaintext, StandardCharsets.UTF_8)
-        if (password.isBlank()) null else SavedRouterCredential(address, password)
+        if (password.isBlank()) {
+            null
+        } else {
+            lastSavedFingerprint = fingerprint(address, password)
+            SavedRouterCredential(address, password)
+        }
     }.getOrElse {
         // A replaced/invalidated device key must never leave unusable credential material behind.
         clear()
@@ -45,23 +54,40 @@ class SecureRouterCredentialStore(context: Context) {
     }
 
     fun save(routerAddress: String, password: String): Boolean = runCatching {
-        require(routerAddress.isNotBlank())
+        val normalizedAddress = routerAddress.trim()
+        require(normalizedAddress.isNotBlank())
         require(password.isNotBlank())
+
+        val fingerprint = fingerprint(normalizedAddress, password)
+        if (
+            lastSavedFingerprint == fingerprint &&
+            preferences.getString(KEY_ADDRESS, null)?.trim() == normalizedAddress &&
+            !preferences.getString(KEY_PASSWORD, null).isNullOrBlank() &&
+            !preferences.getString(KEY_IV, null).isNullOrBlank()
+        ) {
+            return true
+        }
 
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val encrypted = cipher.doFinal(password.toByteArray(StandardCharsets.UTF_8))
 
-        preferences.edit()
-            .putString(KEY_ADDRESS, routerAddress.trim())
+        val committed = preferences.edit()
+            .putString(KEY_ADDRESS, normalizedAddress)
             .putString(KEY_PASSWORD, Base64.encodeToString(encrypted, Base64.NO_WRAP))
             .putString(KEY_IV, Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
-            .apply()
-        true
+            .commit()
+        if (committed) lastSavedFingerprint = fingerprint
+        committed
     }.getOrDefault(false)
 
     fun clear() {
-        preferences.edit().remove(KEY_ADDRESS).remove(KEY_PASSWORD).remove(KEY_IV).apply()
+        lastSavedFingerprint = null
+        preferences.edit()
+            .remove(KEY_ADDRESS)
+            .remove(KEY_PASSWORD)
+            .remove(KEY_IV)
+            .apply()
     }
 
     private fun getOrCreateKey(): SecretKey {
@@ -82,7 +108,12 @@ class SecureRouterCredentialStore(context: Context) {
         return generator.generateKey()
     }
 
+    private fun fingerprint(address: String, password: String): Int = 31 * address.hashCode() + password.hashCode()
+
     private companion object {
+        @Volatile
+        var lastSavedFingerprint: Int? = null
+
         const val PREFERENCES = "zte_secure_router_credentials"
         const val KEY_ALIAS = "zte_smart_hai_router_password_v1"
         const val KEY_ADDRESS = "router_address"

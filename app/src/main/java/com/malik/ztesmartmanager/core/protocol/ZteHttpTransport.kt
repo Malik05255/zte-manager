@@ -28,7 +28,9 @@ class ZteHttpTransport(routerAddress: String) {
     private fun execute(url: URL, method: String, body: String?): String {
         val connection = (url.openConnection() as HttpURLConnection).apply {
             requestMethod = method
-            connectTimeout = 5_000
+            // This is always a local-router connection. Fail a dead/wrong local address faster while
+            // keeping a longer read window for slower firmware responses after TCP is established.
+            connectTimeout = 3_500
             readTimeout = 7_000
             useCaches = false
             setRequestProperty("Accept", "application/json, text/plain, */*")
@@ -46,8 +48,8 @@ class ZteHttpTransport(routerAddress: String) {
             connection.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(body) }
         }
 
-        captureCookies(connection)
         val code = connection.responseCode
+        captureCookies(connection)
         val stream = if (code in 200..299) connection.inputStream else connection.errorStream
         val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
 
@@ -58,13 +60,17 @@ class ZteHttpTransport(routerAddress: String) {
     }
 
     private fun captureCookies(connection: HttpURLConnection) {
-        connection.headerFields["Set-Cookie"].orEmpty().forEach { rawCookie ->
-            val firstPart = rawCookie.substringBefore(';')
-            val separator = firstPart.indexOf('=')
-            if (separator > 0) {
-                cookies[firstPart.substring(0, separator).trim()] = firstPart.substring(separator + 1).trim()
+        connection.headerFields.entries
+            .asSequence()
+            .filter { (name, _) -> name?.equals("Set-Cookie", ignoreCase = true) == true }
+            .flatMap { (_, values) -> values.orEmpty().asSequence() }
+            .forEach { rawCookie ->
+                val firstPart = rawCookie.substringBefore(';')
+                val separator = firstPart.indexOf('=')
+                if (separator > 0) {
+                    cookies[firstPart.substring(0, separator).trim()] = firstPart.substring(separator + 1).trim()
+                }
             }
-        }
     }
 
     private fun cookieHeader(): String {

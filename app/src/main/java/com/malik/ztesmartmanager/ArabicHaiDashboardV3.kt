@@ -15,17 +15,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Switch
@@ -41,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -70,29 +63,31 @@ import com.malik.ztesmartmanager.core.tower.NearbyCell
 import com.malik.ztesmartmanager.core.tower.TowerGuardStatus
 import com.malik.ztesmartmanager.core.tower.TowerMatch
 import com.malik.ztesmartmanager.core.tower.TowerTarget
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val M3Bg = Color(0xFFF6F8FB)
-private val M3Card = Color.White
-private val M3Ink = Color(0xFF10275C)
+private val M3Bg = Color(0xFFF7FAFE)
+private val M3CardColor = Color.White
+private val M3Ink = Color(0xFF0A2C67)
 private val M3Muted = Color(0xFF6A7690)
-private val M3Blue = Color(0xFF1464F4)
+private val M3Blue = Color(0xFF1478F8)
 private val M3Green = Color(0xFF18B978)
-private val M3Red = Color(0xFFE15363)
 private val M3Border = Color(0xFFE5EAF2)
 private val M3SoftBlue = Color(0xFFEEF4FF)
 private val M3SoftGreen = Color(0xFFEAF8F3)
-private val M3SoftOrange = Color(0xFFFFF4E8)
 
-private enum class M3Section { HOME, NETWORK, TOWERS, BANDS, TOOLS }
+private enum class M3Section { HOME, NETWORK, TOOLS, LOGS, MORE, TOWERS, BANDS }
 
 private data class M3Layout(
     val compact: Boolean,
     val padding: Int,
     val gap: Int,
     val scale: Float,
-    val bandColumns: Int
+    val bandColumns: Int,
+    val cardRadius: Int,
+    val bottomBarHeight: Int
 )
 
 @Composable
@@ -125,6 +120,7 @@ fun ArabicHaiDashboardV3(
     towerGuardStatus: TowerGuardStatus?,
     onDisconnect: () -> Unit,
     onSpeedTest: () -> Unit,
+    onRefreshSnapshot: () -> Unit,
     onPlacementToggle: () -> Unit,
     onSmartModeChange: (Boolean) -> Unit,
     onSmartGoalChange: (OptimizationGoal) -> Unit,
@@ -151,15 +147,48 @@ fun ArabicHaiDashboardV3(
             val height = maxHeight.value.roundToInt().coerceAtLeast(1)
             val spec = remember(width, height) { HaiResponsivePolicy.resolve(width, height) }
             val layout = M3Layout(
-                compact = width < 380,
-                padding = if (width < 360) 12 else if (width < 430) 16 else 20,
-                gap = if (height < 760) 12 else 15,
-                scale = spec.textScale.coerceIn(1.0f, 1.12f),
-                bandColumns = if (width < 350) 3 else 4
+                compact = width < 370,
+                padding = spec.horizontalPaddingDp,
+                gap = spec.sectionGapDp,
+                scale = spec.textScale,
+                bandColumns = if (width < 350) 3 else 4,
+                cardRadius = spec.cardRadiusDp,
+                bottomBarHeight = spec.bottomBarHeightDp
             )
 
+            if (snapshot != null && section == M3Section.HOME) {
+                TargetHomeDashboard(
+                    snapshot = snapshot,
+                    telemetrySamples = telemetrySamples,
+                    status = status,
+                    operationMessage = operationMessage,
+                    lastPerformance = lastPerformance,
+                    speedBusy = speedBusy,
+                    controlBusy = controlBusy,
+                    smartBusy = smartBusy,
+                    onDisconnect = onDisconnect,
+                    onSpeedTest = onSpeedTest,
+                    onSetNetworkMode = onSetNetworkMode,
+                    onNavigateNetwork = { section = M3Section.NETWORK },
+                    onNavigateTowers = { section = M3Section.TOWERS },
+                    onNavigateBands = { section = M3Section.BANDS },
+                    onNavigateTools = { section = M3Section.TOOLS },
+                    onNavigateLogs = { section = M3Section.LOGS },
+                    onNavigateMore = { section = M3Section.MORE },
+                    onRefreshNow = onRefreshSnapshot,
+                    onOptimizeNow = onOptimizeNow
+                )
+                return@BoxWithConstraints
+            }
+
             Column(Modifier.fillMaxSize()) {
-                M3Header(layout, snapshot != null, onDisconnect)
+                HaiSharedHeader(
+                    connected = snapshot != null,
+                    onDisconnect = onDisconnect,
+                    onMenu = { section = M3Section.MORE },
+                    onSettings = { section = M3Section.TOOLS },
+                    onSearch = { section = M3Section.TOWERS }
+                )
 
                 if (snapshot == null) {
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -171,18 +200,17 @@ fun ArabicHaiDashboardV3(
                             modifier = Modifier.padding(24.dp)
                         )
                     }
-                    M3BottomNav(section, { section = it })
+                    M3BottomNav(section) { section = it }
                     return@Column
                 }
 
-                Box(Modifier.weight(1f)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(
                             start = layout.padding.dp,
                             end = layout.padding.dp,
                             top = 4.dp,
-                            bottom = 96.dp
+                            bottom = (layout.gap * 2).dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(layout.gap.dp)
                     ) {
@@ -191,115 +219,86 @@ fun ArabicHaiDashboardV3(
                         }
 
                         when (section) {
-                            M3Section.HOME -> {
-                                item { M3NetworkCard(layout, snapshot) }
-                                item { M3SpeedCard(layout, lastPerformance, speedBusy, onSpeedTest) }
-                                item {
-                                    M3QuickGrid(
-                                        layout,
-                                        onBands = { section = M3Section.BANDS },
-                                        onTowers = { section = M3Section.TOWERS },
-                                        onNetwork = { section = M3Section.NETWORK },
-                                        onOptimize = onOptimizeNow
-                                    )
-                                }
-                                item { M3SignalCard(layout, snapshot, telemetrySamples) }
-                            }
-
+                            M3Section.HOME -> Unit
                             M3Section.NETWORK -> {
                                 item { M3NetworkCard(layout, snapshot) }
-                                item { M3NetworkMode(layout, controlBusy, onSetNetworkMode) }
+                                item { M3NetworkMode(layout, snapshot, controlBusy, onSetNetworkMode) }
                                 item { M3Traffic(layout, traffic) }
                                 if (thermal?.hasAnyEvidence == true) item { M3Thermal(layout, thermal) }
                             }
-
-                            M3Section.TOWERS -> {
-                                item {
-                                    M3TowerControls(
-                                        layout,
-                                        snapshot,
-                                        nearbyCells,
-                                        controlBusy,
-                                        scanBusy,
-                                        towerTarget,
-                                        towerGuardEnabled,
-                                        towerGuardStatus,
-                                        onScanCells,
-                                        onLockCurrentCell,
-                                        onLockNearbyCell,
-                                        onClearCellLock,
-                                        onTowerGuardChange
-                                    )
-                                }
-                            }
-
-                            M3Section.BANDS -> {
-                                item {
-                                    M3Bands(
-                                        layout,
-                                        snapshot,
-                                        capabilities,
-                                        selectedLte,
-                                        selectedNr,
-                                        controlBusy,
-                                        onLteToggle,
-                                        onNrToggle,
-                                        onApplyLte,
-                                        onApplyNr
-                                    )
-                                }
-                            }
-
                             M3Section.TOOLS -> {
                                 item {
                                     M3Tools(
-                                        layout,
-                                        runtime,
-                                        stability,
-                                        placementMode,
-                                        placementReading,
-                                        smartMode,
-                                        smartGoal,
-                                        smartBusy,
-                                        smartReport,
-                                        safetyBackupAvailable,
-                                        capabilities.supportsAntennaControl,
-                                        controlBusy,
-                                        onPlacementToggle,
-                                        onSmartModeChange,
-                                        onSmartGoalChange,
-                                        onOptimizeNow,
-                                        onRestoreSafetyBackup,
-                                        onAntennaState,
-                                        onCopyDiagnostics,
-                                        onShareDiagnostics
+                                        layout = layout,
+                                        runtime = runtime,
+                                        stability = stability,
+                                        placementMode = placementMode,
+                                        placementReading = placementReading,
+                                        smartMode = smartMode,
+                                        smartGoal = smartGoal,
+                                        smartBusy = smartBusy,
+                                        smartReport = smartReport,
+                                        backupAvailable = safetyBackupAvailable,
+                                        supportsAntenna = capabilities.supportsAntennaControl,
+                                        busy = controlBusy,
+                                        onPlacementToggle = onPlacementToggle,
+                                        onSmartModeChange = onSmartModeChange,
+                                        onSmartGoalChange = onSmartGoalChange,
+                                        onOptimizeNow = onOptimizeNow,
+                                        onRestore = onRestoreSafetyBackup,
+                                        onAntennaState = onAntennaState,
+                                        onCopyDiagnostics = onCopyDiagnostics,
+                                        onShareDiagnostics = onShareDiagnostics,
+                                        onRefresh = onRefreshSnapshot
                                     )
                                 }
                             }
+                            M3Section.LOGS -> item { M3Logs(layout, telemetrySamples, lastPerformance) }
+                            M3Section.MORE -> item {
+                                M3More(
+                                    layout = layout,
+                                    snapshot = snapshot,
+                                    onTowers = { section = M3Section.TOWERS },
+                                    onBands = { section = M3Section.BANDS },
+                                    onNetwork = { section = M3Section.NETWORK },
+                                    onTools = { section = M3Section.TOOLS }
+                                )
+                            }
+                            M3Section.TOWERS -> item {
+                                M3TowerControls(
+                                    layout = layout,
+                                    snapshot = snapshot,
+                                    cells = nearbyCells,
+                                    busy = controlBusy,
+                                    scanBusy = scanBusy,
+                                    target = towerTarget,
+                                    guardEnabled = towerGuardEnabled,
+                                    guardStatus = towerGuardStatus,
+                                    onScan = onScanCells,
+                                    onLockCurrent = onLockCurrentCell,
+                                    onLockCell = onLockNearbyCell,
+                                    onClear = onClearCellLock,
+                                    onGuardChange = onTowerGuardChange
+                                )
+                            }
+                            M3Section.BANDS -> item {
+                                M3Bands(
+                                    layout = layout,
+                                    snapshot = snapshot,
+                                    capabilities = capabilities,
+                                    selectedLte = selectedLte,
+                                    selectedNr = selectedNr,
+                                    busy = controlBusy,
+                                    onLteToggle = onLteToggle,
+                                    onNrToggle = onNrToggle,
+                                    onApplyLte = onApplyLte,
+                                    onApplyNr = onApplyNr
+                                )
+                            }
                         }
-                    }
-                    M3BottomNav(section, { section = it }, Modifier.align(Alignment.BottomCenter))
                 }
+                M3BottomNav(section) { section = it }
             }
-        }
-    }
-}
-
-@Composable
-private fun M3Header(layout: M3Layout, connected: Boolean, onDisconnect: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = layout.padding.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text("ZTE Smart HAI", color = M3Ink, fontSize = m3sp(layout, 21), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-        Row(
-            Modifier.clip(RoundedCornerShape(50)).background(M3Card).border(1.dp, M3Border, RoundedCornerShape(50))
-                .clickable(enabled = connected, onClick = onDisconnect).padding(horizontal = 12.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(if (connected) M3Green else M3Red))
-            Spacer(Modifier.width(6.dp))
-            Text(if (connected) "متصل" else "غير متصل", color = M3Ink, fontSize = m3sp(layout, 12), fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -317,17 +316,16 @@ private fun M3NetworkCard(layout: M3Layout, snapshot: RouterSnapshot) {
     }
     val rsrp = if (nr) snapshot.nrRsrp else snapshot.lteRsrp
     val sinr = if (nr) snapshot.nrSinr else snapshot.lteSinr
-
     M3Card(layout) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(18.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(network, color = M3Ink, fontSize = m3sp(layout, 48), fontWeight = FontWeight.Black)
-                    Text(mode, color = M3Blue, fontSize = m3sp(layout, 16), fontWeight = FontWeight.Bold)
+                    Text("حالة الشبكة", color = M3Ink, fontSize = m3sp(layout, 17), fontWeight = FontWeight.Black)
+                    Text("$network $mode", color = M3Blue, fontSize = m3sp(layout, 30), fontWeight = FontWeight.Black)
                 }
                 M3Pill(m3Quality(rsrp), if (rsrp == null) M3Muted else M3Green)
             }
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 M3Metric("RSRP", rsrp, "dBm", Modifier.weight(1f))
                 M3Metric("SINR", sinr, "dB", Modifier.weight(1f))
@@ -338,82 +336,19 @@ private fun M3NetworkCard(layout: M3Layout, snapshot: RouterSnapshot) {
 }
 
 @Composable
-private fun M3SpeedCard(layout: M3Layout, performance: NetworkPerformance?, busy: Boolean, onSpeedTest: () -> Unit) {
-    M3Card(layout) {
-        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("السرعة", color = M3Ink, fontSize = m3sp(layout, 17), fontWeight = FontWeight.Black)
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text(performance?.downloadMbps?.let(::m3Fmt0) ?: "—", color = M3Ink, fontSize = m3sp(layout, 30), fontWeight = FontWeight.Black)
-                    Text(" Mb/s", color = M3Muted, fontSize = m3sp(layout, 12), modifier = Modifier.padding(bottom = 4.dp))
-                }
-                performance?.latencyMs?.let { Text("${m3Fmt0(it)} ms", color = M3Muted, fontSize = m3sp(layout, 11)) }
-            }
-            Button(
-                onClick = onSpeedTest,
-                enabled = !busy,
-                modifier = Modifier.height(48.dp),
-                shape = RoundedCornerShape(15.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = M3Blue)
-            ) {
-                Text(if (busy) "جاري…" else "اختبار", color = Color.White, fontSize = m3sp(layout, 13), fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}
-
-@Composable
-private fun M3QuickGrid(layout: M3Layout, onBands: () -> Unit, onTowers: () -> Unit, onNetwork: () -> Unit, onOptimize: () -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            M3Quick("▦", "الترددات", M3SoftBlue, Modifier.weight(1f), onBands)
-            M3Quick("⌾", "الأبراج", M3SoftGreen, Modifier.weight(1f), onTowers)
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-            M3Quick("⌁", "الشبكة", M3SoftOrange, Modifier.weight(1f), onNetwork)
-            M3Quick("✦", "تحسين", Color(0xFFF3EEFF), Modifier.weight(1f), onOptimize)
-        }
-    }
-}
-
-@Composable
-private fun M3Quick(icon: String, title: String, bg: Color, modifier: Modifier, onClick: () -> Unit) {
-    Row(
-        modifier.clip(RoundedCornerShape(20.dp)).background(bg).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 15.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(icon, color = M3Blue, fontSize = 21.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.width(10.dp))
-        Text(title, color = M3Ink, fontSize = 14.sp, fontWeight = FontWeight.Black)
-    }
-}
-
-@Composable
-private fun M3SignalCard(layout: M3Layout, snapshot: RouterSnapshot, samples: List<SafeTelemetrySample>) {
-    val nr = snapshot.raw["_zte_nr_active_verified"].equals("true", true)
-    val rsrp = if (nr) snapshot.nrRsrp else snapshot.lteRsrp
-    M3Card(layout) {
-        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("الإشارة", color = M3Ink, fontSize = m3sp(layout, 17), fontWeight = FontWeight.Black)
-                Text(rsrp?.let { "${m3Fmt0(it)} dBm" } ?: "—", color = M3Blue, fontSize = m3sp(layout, 24), fontWeight = FontWeight.Black)
-            }
-            Text(if (samples.size >= 5) "${samples.size} قراءة" else "حي", color = M3Muted, fontSize = m3sp(layout, 12), fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun M3NetworkMode(layout: M3Layout, busy: Boolean, onSetNetworkMode: (String) -> Unit) {
+private fun M3NetworkMode(layout: M3Layout, snapshot: RouterSnapshot, busy: Boolean, onSetNetworkMode: (String) -> Unit) {
+    val current = snapshot.raw["BearerPreference"].orEmpty()
     M3Card(layout) {
         Column(Modifier.padding(18.dp)) {
             Text("وضع الشبكة", color = M3Ink, fontSize = m3sp(layout, 18), fontWeight = FontWeight.Black)
             Spacer(Modifier.height(12.dp))
-            M3Action("4G فقط", !busy) { onSetNetworkMode("Only_LTE") }
+            M3Action("3G فقط${if (current == "Only_WCDMA") " • الحالي" else ""}", !busy) { onSetNetworkMode("Only_WCDMA") }
             Spacer(Modifier.height(8.dp))
-            M3Action("4G + 5G", !busy) { onSetNetworkMode("LTE_AND_5G") }
+            M3Action("4G فقط${if (current == "Only_LTE") " • الحالي" else ""}", !busy) { onSetNetworkMode("Only_LTE") }
             Spacer(Modifier.height(8.dp))
-            M3Action("5G فقط", !busy) { onSetNetworkMode("Only_5G") }
+            M3Action("5G فقط${if (current == "Only_5G") " • الحالي" else ""}", !busy) { onSetNetworkMode("Only_5G") }
+            Spacer(Modifier.height(8.dp))
+            M3Action("تلقائي${if (current == "WL_AND_5G" || current == "LTE_AND_5G") " • الحالي" else ""}", !busy) { onSetNetworkMode("WL_AND_5G") }
         }
     }
 }
@@ -434,11 +369,10 @@ private fun M3Traffic(layout: M3Layout, traffic: TrafficTelemetry?) {
 
 @Composable
 private fun M3Thermal(layout: M3Layout, thermal: ThermalTelemetry) {
-    val highest = thermal.highestObserved
     M3Card(layout) {
         Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("الحرارة", color = M3Ink, fontSize = m3sp(layout, 18), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-            Text(highest?.let { ThermalTelemetryFormatter.celsius(it.celsius) } ?: "—", color = M3Blue, fontSize = m3sp(layout, 20), fontWeight = FontWeight.Black)
+            Text(thermal.highestObserved?.let { ThermalTelemetryFormatter.celsius(it.celsius) } ?: "—", color = M3Blue, fontSize = m3sp(layout, 20), fontWeight = FontWeight.Black)
         }
     }
 }
@@ -460,22 +394,24 @@ private fun M3TowerControls(
     onGuardChange: (Boolean) -> Unit
 ) {
     M3Card(layout) {
-        Column(Modifier.padding(18.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("الأبراج", color = M3Ink, fontSize = m3sp(layout, 20), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
-                M3CompactAction(if (scanBusy) "جاري…" else "مسح", !scanBusy && !busy, onScan)
+                Text("الأبراج والخلايا", color = M3Ink, fontSize = m3sp(layout, 20), fontWeight = FontWeight.Black, modifier = Modifier.weight(1f))
+                M3CompactAction(if (scanBusy) "جاري…" else "مسح فعلي", !scanBusy && !busy, onScan)
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
+            VerifiedTowerMapPanel(snapshot = snapshot, cells = cells, busy = busy, onLockCell = onLockCell)
+            Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 M3ValueBox("PCI", snapshot.pci?.toString() ?: "—", "", M3SoftBlue, Modifier.weight(1f))
                 M3ValueBox("EARFCN", snapshot.earfcn?.toString() ?: "—", "", M3SoftGreen, Modifier.weight(1f))
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 M3Primary("تثبيت الحالية", !busy && snapshot.pci != null && snapshot.earfcn != null, Modifier.weight(1f), onLockCurrent)
                 M3Outline("إزالة القفل", !busy, Modifier.weight(1f), onClear)
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("حارس البرج", color = M3Ink, fontSize = m3sp(layout, 14), fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 Switch(
@@ -485,16 +421,17 @@ private fun M3TowerControls(
                     colors = SwitchDefaults.colors(checkedTrackColor = M3Green)
                 )
             }
-            if (target != null) {
-                Text("PCI ${target.pci} • EARFCN ${target.earfcn}", color = M3Blue, fontSize = m3sp(layout, 12), fontWeight = FontWeight.Bold)
-            }
+            target?.let { Text("PCI ${it.pci} • EARFCN ${it.earfcn}", color = M3Blue, fontSize = m3sp(layout, 12), fontWeight = FontWeight.Bold) }
             guardStatus?.let {
-                val short = if (it.match == TowerMatch.MATCHED) "مطابق" else compactOperationMessage(it.message)
-                if (short.isNotBlank()) Text(short, color = if (it.match == TowerMatch.MATCHED) M3Green else M3Muted, fontSize = m3sp(layout, 11), modifier = Modifier.padding(top = 4.dp))
+                Text(
+                    if (it.match == TowerMatch.MATCHED) "القفل مطابق فعليًا" else compactOperationMessage(it.message),
+                    color = if (it.match == TowerMatch.MATCHED) M3Green else M3Muted,
+                    fontSize = m3sp(layout, 11),
+                    modifier = Modifier.padding(top = 4.dp)
+                )
             }
-
             if (cells.isNotEmpty()) {
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(12.dp))
                 cells.take(12).forEachIndexed { index, cell ->
                     M3CellRow(index + 1, cell, snapshot, busy, onLockCell)
                     if (index != cells.take(12).lastIndex) Spacer(Modifier.height(7.dp))
@@ -509,7 +446,8 @@ private fun M3CellRow(index: Int, cell: NearbyCell, snapshot: RouterSnapshot, bu
     val current = cell.rat == "LTE" && cell.pci == snapshot.pci && cell.arfcn == snapshot.earfcn
     val lockable = cell.rat == "LTE" && cell.pci != null && cell.arfcn != null
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (current) M3SoftGreen else Color(0xFFF8FAFD)).padding(12.dp),
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+            .background(if (current) M3SoftGreen else Color(0xFFF8FAFD)).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(index.toString(), color = M3Blue, fontSize = 13.sp, fontWeight = FontWeight.Black, modifier = Modifier.width(24.dp))
@@ -518,7 +456,7 @@ private fun M3CellRow(index: Int, cell: NearbyCell, snapshot: RouterSnapshot, bu
             Text("ARFCN ${cell.arfcn ?: "—"} • ${cell.rsrp?.let { "${m3Fmt0(it)} dBm" } ?: "—"}", color = M3Muted, fontSize = 11.sp)
         }
         if (lockable && !current) {
-            Text("تثبيت", color = if (busy) M3Muted else M3Blue, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(enabled = !busy) { onLock(cell) }.padding(8.dp))
+            Text("انتقل", color = if (busy) M3Muted else M3Blue, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(enabled = !busy) { onLock(cell) }.padding(8.dp))
         } else if (current) {
             M3Pill("الحالية", M3Green)
         }
@@ -545,7 +483,6 @@ private fun M3Bands(
         snapshot.cells.filter { if (showNr) it.role == CellRole.NR else it.role != CellRole.NR }
             .mapNotNull { m3BandNumber(it.band) }.toSet()
     }
-
     M3Card(layout) {
         Column(Modifier.padding(18.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -576,14 +513,11 @@ private fun M3Bands(
                 }
                 Spacer(Modifier.height(8.dp))
             }
-            Spacer(Modifier.height(6.dp))
             M3Primary(
                 if (showNr) "تطبيق 5G" else "تطبيق 4G",
                 selected.isNotEmpty() && !busy && (!showNr || capabilities.supportsNrBandLock),
                 Modifier.fillMaxWidth()
-            ) {
-                if (showNr) onApplyNr() else onApplyLte()
-            }
+            ) { if (showNr) onApplyNr() else onApplyLte() }
         }
     }
 }
@@ -609,7 +543,8 @@ private fun M3Tools(
     onRestore: () -> Unit,
     onAntennaState: (Int) -> Unit,
     onCopyDiagnostics: () -> Unit,
-    onShareDiagnostics: () -> Unit
+    onShareDiagnostics: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(layout.gap.dp)) {
         M3Card(layout) {
@@ -626,7 +561,6 @@ private fun M3Tools(
                 smartReport?.let { Text("آخر نتيجة: ${it.best.qualityScore}/100", color = M3Muted, fontSize = m3sp(layout, 11), modifier = Modifier.padding(top = 8.dp)) }
             }
         }
-
         M3Card(layout) {
             Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -636,50 +570,110 @@ private fun M3Tools(
                 Switch(checked = placementMode, onCheckedChange = { onPlacementToggle() }, colors = SwitchDefaults.colors(checkedTrackColor = M3Green))
             }
         }
-
         M3Card(layout) {
             Column(Modifier.padding(18.dp)) {
                 Text("التشخيص", color = M3Ink, fontSize = m3sp(layout, 18), fontWeight = FontWeight.Black)
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 if (runtime == null) {
                     Text("غير جاهز", color = M3Muted, fontSize = m3sp(layout, 12))
                 } else {
-                    val ready = listOf(
-                        runtime.lteBandControl,
-                        runtime.nrBandControl,
-                        runtime.cellLock,
-                        runtime.networkMode,
-                        runtime.neighborScan,
-                        runtime.antennaControl
-                    ).count { it.state == RuntimeCapabilityState.SAFE_TO_ATTEMPT }
+                    val ready = listOf(runtime.lteBandControl, runtime.nrBandControl, runtime.cellLock, runtime.networkMode, runtime.neighborScan, runtime.antennaControl)
+                        .count { it.state == RuntimeCapabilityState.SAFE_TO_ATTEMPT }
                     Text("$ready وظائف جاهزة", color = M3Green, fontSize = m3sp(layout, 14), fontWeight = FontWeight.Bold)
                 }
-                Text(stability.summary, color = M3Muted, fontSize = m3sp(layout, 11), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(stability.summary, color = M3Muted, fontSize = m3sp(layout, 11), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    M3Outline("نسخ", true, Modifier.weight(1f), onCopyDiagnostics)
-                    M3Outline("مشاركة", true, Modifier.weight(1f), onShareDiagnostics)
+                    M3Outline("نسخ التقرير", true, Modifier.weight(1f), onCopyDiagnostics)
+                    M3Outline("مشاركة التقرير", true, Modifier.weight(1f), onShareDiagnostics)
                 }
+                Spacer(Modifier.height(8.dp))
+                M3Outline("تحديث البيانات الآن", !busy, Modifier.fillMaxWidth(), onRefresh)
             }
         }
-
         M3Card(layout) {
             Column(Modifier.padding(18.dp)) {
-                Text("الاستعادة", color = M3Ink, fontSize = m3sp(layout, 18), fontWeight = FontWeight.Black)
+                Text("الاستعادة الآمنة", color = M3Ink, fontSize = m3sp(layout, 18), fontWeight = FontWeight.Black)
                 Spacer(Modifier.height(10.dp))
                 M3Primary("استعادة النسخة", backupAvailable && !busy, Modifier.fillMaxWidth(), onRestore)
             }
         }
-
         if (supportsAntenna) {
             M3Card(layout) {
                 Column(Modifier.padding(18.dp)) {
                     Text("الهوائي", color = M3Ink, fontSize = m3sp(layout, 18), fontWeight = FontWeight.Black)
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        (1..3).forEach { state -> M3Outline(state.toString(), !busy, Modifier.weight(1f)) { onAntennaState(state) } }
+                        (1..3).forEach { state -> M3Outline("وضع $state", !busy, Modifier.weight(1f)) { onAntennaState(state) } }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3Logs(layout: M3Layout, samples: List<SafeTelemetrySample>, performance: NetworkPerformance?) {
+    M3Card(layout) {
+        Column(Modifier.padding(16.dp)) {
+            Text("السجلات الحية", color = M3Ink, fontSize = m3sp(layout, 24), fontWeight = FontWeight.Black)
+            Text("آخر القراءات التي استلمها التطبيق فعلًا من الراوتر", color = M3Muted, fontSize = m3sp(layout, 13), lineHeight = m3sp(layout, 18))
+            performance?.let {
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "آخر اختبار سرعة: تنزيل ${it.downloadMbps?.let(::m3Fmt1) ?: "—"} Mb/s • رفع ${it.uploadMbps?.let(::m3Fmt1) ?: "—"} Mb/s • ${it.latencyMs?.let(::m3Fmt0) ?: "—"} ms",
+                    color = M3Blue,
+                    fontSize = m3sp(layout, 11),
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            if (samples.isEmpty()) {
+                Text("لا توجد قراءات بعد", color = M3Muted, fontSize = m3sp(layout, 12))
+            } else {
+                samples.asReversed().take(30).forEach { sample ->
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFFF8FAFD)).padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "${sample.networkType ?: "غير مؤكد"} • ${sample.nrBand ?: sample.lteBand ?: "لا يوجد تردد موثّق"}",
+                                color = M3Ink,
+                                fontSize = m3sp(layout, 11),
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "RSRP ${sample.nrRsrp ?: sample.lteRsrp ?: "—"} • SINR ${sample.nrSinr ?: sample.lteSinr ?: "—"} • PCI ${sample.pci ?: "—"} • EARFCN ${sample.earfcn ?: "—"}",
+                                color = M3Muted,
+                                fontSize = m3sp(layout, 9)
+                            )
+                        }
+                        Text(m3Time(sample.timestampEpochMs), color = M3Muted, fontSize = m3sp(layout, 9))
+                    }
+                    Spacer(Modifier.height(6.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3More(layout: M3Layout, snapshot: RouterSnapshot, onTowers: () -> Unit, onBands: () -> Unit, onNetwork: () -> Unit, onTools: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(layout.gap.dp)) {
+        M3Card(layout) {
+            Column(Modifier.padding(18.dp)) {
+                Text("المزيد", color = M3Ink, fontSize = m3sp(layout, 20), fontWeight = FontWeight.Black)
+                Text(snapshot.model ?: "طراز الراوتر غير مقروء", color = M3Muted, fontSize = m3sp(layout, 12))
+                snapshot.firmware?.let { Text("إصدار الراوتر: $it", color = M3Muted, fontSize = m3sp(layout, 10), maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                Spacer(Modifier.height(12.dp))
+                M3Action("الأبراج والخريطة", true, onTowers)
+                Spacer(Modifier.height(8.dp))
+                M3Action("الترددات وقفل النطاقات", true, onBands)
+                Spacer(Modifier.height(8.dp))
+                M3Action("تفاصيل الشبكة", true, onNetwork)
+                Spacer(Modifier.height(8.dp))
+                M3Action("الأدوات والتشخيص", true, onTools)
             }
         }
     }
@@ -706,7 +700,8 @@ private fun M3ValueBox(title: String, value: String, unit: String, bg: Color, mo
 @Composable
 private fun M3Action(text: String, enabled: Boolean, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp)).background(if (enabled) M3SoftBlue else Color(0xFFF1F3F6))
+        Modifier.fillMaxWidth().height(50.dp).clip(RoundedCornerShape(16.dp))
+            .background(if (enabled) M3SoftBlue else Color(0xFFF1F3F6))
             .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -717,28 +712,42 @@ private fun M3Action(text: String, enabled: Boolean, onClick: () -> Unit) {
 
 @Composable
 private fun M3Primary(text: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.height(50.dp).clip(RoundedCornerShape(16.dp)).background(if (enabled) M3Blue else Color(0xFFE7EAF0)).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.height(50.dp).clip(RoundedCornerShape(16.dp))
+            .background(if (enabled) M3Blue else Color(0xFFE7EAF0)).clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
         Text(text, color = if (enabled) Color.White else M3Muted, fontSize = 13.sp, fontWeight = FontWeight.Black, maxLines = 1)
     }
 }
 
 @Composable
 private fun M3Outline(text: String, enabled: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Box(modifier.height(50.dp).clip(RoundedCornerShape(16.dp)).background(M3Card).border(1.dp, M3Border, RoundedCornerShape(16.dp)).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(
+        modifier.height(50.dp).clip(RoundedCornerShape(16.dp)).background(M3CardColor)
+            .border(1.dp, M3Border, RoundedCornerShape(16.dp)).clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
         Text(text, color = if (enabled) M3Ink else M3Muted, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
 @Composable
 private fun M3CompactAction(text: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(50)).background(M3SoftBlue).clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp)) {
+    Box(
+        Modifier.clip(RoundedCornerShape(50)).background(M3SoftBlue)
+            .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp)
+    ) {
         Text(text, color = if (enabled) M3Blue else M3Muted, fontSize = 12.sp, fontWeight = FontWeight.Black)
     }
 }
 
 @Composable
 private fun M3Choice(text: String, selected: Boolean, onClick: () -> Unit) {
-    Box(Modifier.clip(RoundedCornerShape(50)).background(if (selected) M3Blue else Color(0xFFF0F3F8)).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp)) {
+    Box(
+        Modifier.clip(RoundedCornerShape(50)).background(if (selected) M3Blue else Color(0xFFF0F3F8))
+            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 9.dp)
+    ) {
         Text(text, color = if (selected) Color.White else M3Ink, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
 }
@@ -752,7 +761,7 @@ private fun M3Pill(text: String, color: Color) {
 
 @Composable
 private fun M3Message(layout: M3Layout, text: String) {
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(M3SoftBlue).padding(horizontal = 14.dp, vertical = 10.dp)) {
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(layout.cardRadius.dp)).background(M3SoftBlue).padding(horizontal = 14.dp, vertical = 10.dp)) {
         Text(text, color = M3Ink, fontSize = m3sp(layout, 12), maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
@@ -760,32 +769,31 @@ private fun M3Message(layout: M3Layout, text: String) {
 @Composable
 private fun M3Card(layout: M3Layout, content: @Composable () -> Unit) {
     Card(
-        modifier = Modifier.fillMaxWidth().shadow(7.dp, RoundedCornerShape(if (layout.compact) 22.dp else 26.dp)),
-        shape = RoundedCornerShape(if (layout.compact) 22.dp else 26.dp),
-        colors = CardDefaults.cardColors(containerColor = M3Card),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(layout.cardRadius.dp),
+        colors = CardDefaults.cardColors(containerColor = M3CardColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         border = BorderStroke(1.dp, M3Border)
     ) { content() }
 }
 
 @Composable
 private fun M3BottomNav(selected: M3Section, onSelect: (M3Section) -> Unit, modifier: Modifier = Modifier) {
-    Row(
-        modifier.fillMaxWidth().navigationBarsPadding().height(78.dp).background(Color.White).padding(horizontal = 6.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        M3Nav("⌂", "الرئيسية", selected == M3Section.HOME, Modifier.weight(1f)) { onSelect(M3Section.HOME) }
-        M3Nav("⌁", "الشبكة", selected == M3Section.NETWORK, Modifier.weight(1f)) { onSelect(M3Section.NETWORK) }
-        M3Nav("⌾", "الأبراج", selected == M3Section.TOWERS, Modifier.weight(1f)) { onSelect(M3Section.TOWERS) }
-        M3Nav("▦", "الترددات", selected == M3Section.BANDS, Modifier.weight(1f)) { onSelect(M3Section.BANDS) }
-        M3Nav("⚒", "الأدوات", selected == M3Section.TOOLS, Modifier.weight(1f)) { onSelect(M3Section.TOOLS) }
-    }
-}
-
-@Composable
-private fun M3Nav(icon: String, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    Column(modifier.clickable(onClick = onClick).padding(vertical = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(icon, color = if (selected) M3Blue else M3Muted, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(label, color = if (selected) M3Blue else M3Muted, fontSize = 10.sp, fontWeight = if (selected) FontWeight.Black else FontWeight.Medium, maxLines = 1)
+    Box(modifier.fillMaxWidth()) {
+        HaiSharedBottomNav(
+            selected = when (selected) {
+                M3Section.HOME -> "home"
+                M3Section.NETWORK -> "network"
+                M3Section.TOOLS -> "tools"
+                M3Section.LOGS -> "logs"
+                M3Section.MORE, M3Section.TOWERS, M3Section.BANDS -> "more"
+            },
+            onHome = { onSelect(M3Section.HOME) },
+            onNetwork = { onSelect(M3Section.NETWORK) },
+            onTools = { onSelect(M3Section.TOOLS) },
+            onLogs = { onSelect(M3Section.LOGS) },
+            onMore = { onSelect(M3Section.MORE) }
+        )
     }
 }
 
@@ -823,3 +831,4 @@ private fun m3BandNumber(value: String?): Int? = value?.trim()?.removePrefix("n"
 private fun m3Fmt0(value: Double): String = String.format(Locale.US, "%.0f", value)
 private fun m3Fmt1(value: Double): String = String.format(Locale.US, "%.1f", value)
 private fun m3sp(layout: M3Layout, base: Int) = (base * layout.scale).sp
+private fun m3Time(epochMs: Long): String = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(epochMs))

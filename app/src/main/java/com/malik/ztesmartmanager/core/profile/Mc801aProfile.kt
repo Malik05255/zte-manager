@@ -28,6 +28,7 @@ object Mc801aProfile : RouterProfile {
         "network_type", "current_network", "current_network_mode", "nRat",
         "net_select", "net_select_mode", "m_netselect_save", "m_netselect_contents", "BearerPreference",
         "network_provider", "network_provider_fullname", "rmcc", "rmnc", "mdm_mcc", "mdm_mnc",
+        "lte_tac", "nr5g_tac", "tac", "tac_code", "lte_lac", "lac", "lac_code",
         "signalbar", "modem_main_state", "ppp_status",
 
         // Documented/read-only ZTE WAN traffic counters. Throughput values are bytes per second.
