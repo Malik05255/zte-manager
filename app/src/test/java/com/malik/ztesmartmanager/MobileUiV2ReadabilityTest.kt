@@ -7,10 +7,9 @@ import org.junit.Test
 class MobileUiV2ReadabilityTest {
     @Test
     fun productionDashboard_keepsMicroLabelsReadable() {
-        val files = listOf(
-            File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt"),
-            File("src/main/java/com/malik/ztesmartmanager/PulseNetworkMap.kt")
-        )
+        val root = File("src/main/java/com/malik/ztesmartmanager")
+        val files = root.listFiles()?.filter { it.name.startsWith("Glass") && it.extension == "kt" }.orEmpty() +
+            File(root, "PulseNetworkMap.kt")
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
         val tooTiny = files.flatMap { source ->
             regex.findAll(source.readText())
@@ -28,28 +27,30 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun pulseDashboard_isHomeFirstAndAvoidsCardCramming() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt").readText()
-        assertTrue(source.contains("private fun PulseHome"))
-        assertTrue(source.contains("LazyColumn("))
-        assertTrue(source.contains("PulseHero(snapshot)"))
-        assertTrue(source.contains("PulsePlacementCard("))
-        assertTrue(source.contains("PulseNetworkMap(snapshot"))
-        assertTrue(source.contains("PulseSpeedCard("))
-        assertTrue(source.contains("PulseModeCard("))
+    fun glassDashboard_isHomeFirstAndAvoidsPhoneCramming() {
+        val home = File("src/main/java/com/malik/ztesmartmanager/GlassHomeScreen.kt").readText()
+        val hero = File("src/main/java/com/malik/ztesmartmanager/GlassHomeHero.kt").readText()
+        assertTrue(home.contains("LazyColumn("))
+        assertTrue(home.contains("BoxWithConstraints"))
+        assertTrue(home.contains("maxWidth >= 620.dp"))
+        assertTrue(home.contains("GlassHeroSection(snapshot)"))
+        assertTrue(home.contains("GlassPlacementCard("))
+        assertTrue(home.contains("GlassSpeedTestCard("))
+        assertTrue(home.contains("GlassMapCard("))
+        assertTrue(hero.contains("GlassRouterVisual("))
     }
 
     @Test
     fun homeExplainsQualityInArabicWordsInsteadOfOnlyScores() {
-        val source = File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt").readText()
+        val helpers = File("src/main/java/com/malik/ztesmartmanager/GlassHelpers.kt").readText()
         listOf(
             "ممتاز جدًا",
             "جيد جدًا",
             "بقيت خطوة بسيطة",
             "ثبّت الراوتر هنا",
-            "غيّر المكان"
+            "غيّر مكان الراوتر"
         ).forEach { phrase ->
-            assertTrue("الوصف العربي المبسط مفقود: $phrase", source.contains(phrase))
+            assertTrue("الوصف العربي المبسط مفقود: $phrase", helpers.contains(phrase))
         }
     }
 
@@ -63,17 +64,16 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun productionRoute_usesPulseDashboard() {
+    fun productionRoute_usesGlassDashboard() {
         val runtime = File("src/main/java/com/malik/ztesmartmanager/RuntimeAwareFinalDashboard.kt").readText()
-        assertTrue(runtime.contains("PulseDashboard("))
+        assertTrue(runtime.contains("GlassDashboard("))
     }
 
     @Test
     fun productionDashboard_keepsTruthFirstLanguage() {
-        val dashboard = File("src/main/java/com/malik/ztesmartmanager/PulseDashboard.kt").readText()
+        val bands = File("src/main/java/com/malik/ztesmartmanager/GlassNetworkComponents.kt").readText()
         val map = File("src/main/java/com/malik/ztesmartmanager/PulseNetworkMap.kt").readText()
-        assertTrue(dashboard.contains("لا يُرسم إلا إذا كان موثقًا"))
-        assertTrue(dashboard.contains("لن نعلن نجاح التغيير قبل أن يقرأه الراوتر مرة أخرى"))
+        assertTrue(bands.contains("التطبيق يتحقق بعد التنفيذ"))
         assertTrue(map.contains("لن نرسم خطًا وهميًا"))
     }
 }

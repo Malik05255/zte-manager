@@ -133,7 +133,7 @@ fun RuntimeAwareFinalDashboard(
         supportsAntennaControl = runtime?.antennaControl?.canAttemptWrite == true
     )
 
-    PulseDashboard(
+    GlassDashboard(
         snapshot = snapshot,
         capabilities = effectiveCapabilities,
         runtime = runtime,
