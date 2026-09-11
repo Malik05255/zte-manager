@@ -30,6 +30,10 @@ object Mc801aProfile : RouterProfile {
         "network_provider", "network_provider_fullname", "rmcc", "rmnc", "mdm_mcc", "mdm_mnc",
         "signalbar", "modem_main_state", "ppp_status",
 
+        // Connected-client surfaces. Several ZTE firmwares expose JSON arrays here. If a firmware
+        // refuses these fields in a multi-data request they remain empty; the UI never fabricates clients.
+        "wifi_access_sta_num", "station_list", "lan_station_list",
+
         // Documented/read-only ZTE WAN traffic counters. Throughput values are bytes per second.
         "realtime_tx_thrpt", "realtime_rx_thrpt",
         "realtime_tx_bytes", "realtime_rx_bytes", "realtime_time",

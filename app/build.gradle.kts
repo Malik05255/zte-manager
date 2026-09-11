@@ -11,8 +11,8 @@ android {
         applicationId = "com.malik.ztesmartmanager"
         minSdk = 26
         targetSdk = 36
-        versionCode = 34
-        versionName = "0.5.6"
+        versionCode = 35
+        versionName = "0.6.0"
     }
 
     buildFeatures {
@@ -39,6 +39,9 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+
+    // Native, interactive OpenStreetMap-compatible map. No Google Maps API key is required.
+    implementation("org.maplibre.gl:android-sdk:13.6.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
