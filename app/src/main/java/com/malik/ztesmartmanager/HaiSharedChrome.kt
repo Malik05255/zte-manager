@@ -75,8 +75,8 @@ fun HaiSharedHeader(
                 Text(
                     text = "ZTE Smart HAI",
                     color = HaiReferenceDesign.Ink,
-                    fontSize = 20.5.sp,
-                    lineHeight = 21.sp,
+                    fontSize = 22.sp,
+                    lineHeight = 23.sp,
                     fontWeight = FontWeight.Black,
                     maxLines = 1
                 )
@@ -84,8 +84,8 @@ fun HaiSharedHeader(
                 Text(
                     text = "إدارة شبكتك ... بكل سهولة",
                     color = HaiReferenceDesign.Muted,
-                    fontSize = 8.2.sp,
-                    lineHeight = 9.sp,
+                    fontSize = 10.sp,
+                    lineHeight = 12.sp,
                     maxLines = 1
                 )
             }
@@ -97,7 +97,7 @@ fun HaiSharedHeader(
             ) {
                 Row(
                     modifier = Modifier
-                        .height(33.dp)
+                        .height(36.dp)
                         .clip(RoundedCornerShape(18.dp))
                         .background(if (connected) HaiReferenceDesign.SoftGreen else Color(0xFFFFEEEE))
                         .clickable(enabled = connected, onClick = onDisconnect)
@@ -114,7 +114,7 @@ fun HaiSharedHeader(
                     Text(
                         text = if (connected) "متصل" else "غير متصل",
                         color = HaiReferenceDesign.Ink,
-                        fontSize = 9.2.sp,
+                        fontSize = 10.5.sp,
                         fontWeight = FontWeight.ExtraBold,
                         maxLines = 1
                     )
@@ -124,7 +124,7 @@ fun HaiSharedHeader(
                     modifier = Modifier.size(ui.chromeButtonSize).clickable(onClick = onMenu),
                     contentAlignment = Alignment.Center
                 ) {
-                    ChromeGlyphView(ChromeGlyph.MENU, HaiReferenceDesign.Ink, Modifier.size(23.dp))
+                    ChromeGlyphView(ChromeGlyph.MENU, HaiReferenceDesign.Ink, Modifier.size(25.dp))
                 }
             }
         }
@@ -142,7 +142,7 @@ private fun ChromeCircle(glyph: ChromeGlyph, onClick: () -> Unit) {
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        ChromeGlyphView(glyph, HaiReferenceDesign.Ink, Modifier.size(17.dp))
+        ChromeGlyphView(glyph, HaiReferenceDesign.Ink, Modifier.size(19.dp))
     }
 }
 
@@ -191,12 +191,12 @@ private fun ChromeNavItem(
         modifier = modifier.clickable(onClick = onClick).padding(vertical = 1.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        ChromeGlyphView(glyph, color, Modifier.size(21.dp))
+        ChromeGlyphView(glyph, color, Modifier.size(24.dp))
         Spacer(Modifier.height(3.dp))
         Text(
             text = title,
             color = color,
-            fontSize = 7.7.sp,
+            fontSize = 9.2.sp,
             fontWeight = if (selected) FontWeight.Black else FontWeight.Medium,
             textAlign = TextAlign.Center,
             maxLines = 1

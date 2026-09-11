@@ -100,13 +100,13 @@ fun HaiHomeDashboardV4(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = ui.pagePadding)
             ) {
-                H4Hero(snapshot, Modifier.fillMaxWidth().height(176.dp))
+                H4Hero(snapshot, Modifier.fillMaxWidth().height(H4.HeroHeight))
                 Spacer(Modifier.height(ui.sectionGap))
-                H4Metrics(snapshot, Modifier.fillMaxWidth().height(64.dp))
+                H4Metrics(snapshot, Modifier.fillMaxWidth().height(H4.MetricHeight))
                 Spacer(Modifier.height(ui.sectionGap))
 
                 Row(
-                    Modifier.fillMaxWidth().height(160.dp),
+                    Modifier.fillMaxWidth().height(H4.MiddleRowHeight),
                     horizontalArrangement = Arrangement.spacedBy(ui.sectionGap)
                 ) {
                     H4Speed(
@@ -125,7 +125,7 @@ fun HaiHomeDashboardV4(
                 Spacer(Modifier.height(ui.sectionGap))
 
                 Row(
-                    Modifier.fillMaxWidth().height(134.dp),
+                    Modifier.fillMaxWidth().height(H4.TowerRowHeight),
                     horizontalArrangement = Arrangement.spacedBy(ui.sectionGap)
                 ) {
                     H4Tower(snapshot, onNavigateTowers, Modifier.weight(1.18f).fillMaxHeight())
@@ -134,7 +134,7 @@ fun HaiHomeDashboardV4(
                 Spacer(Modifier.height(ui.sectionGap))
 
                 Row(
-                    Modifier.fillMaxWidth().height(112.dp),
+                    Modifier.fillMaxWidth().height(H4.BottomRowHeight),
                     horizontalArrangement = Arrangement.spacedBy(ui.sectionGap)
                 ) {
                     H4Bands(snapshot, onNavigateBands, Modifier.weight(1.18f).fillMaxHeight())

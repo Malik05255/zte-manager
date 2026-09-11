@@ -41,11 +41,11 @@ object HaiReferenceDesign {
     val CardElevation: Dp = 2.dp
 
     // Approved phone reference geometry at the normalized 393dp design width.
-    val HeroHeight: Dp = 160.dp
-    val MetricHeight: Dp = 58.dp
-    val MiddleRowHeight: Dp = 136.dp
-    val TowerRowHeight: Dp = 118.dp
-    val BottomRowHeight: Dp = 94.dp
+    val HeroHeight: Dp = 184.dp
+    val MetricHeight: Dp = 70.dp
+    val MiddleRowHeight: Dp = 176.dp
+    val TowerRowHeight: Dp = 146.dp
+    val BottomRowHeight: Dp = 122.dp
 }
 
 @Composable

@@ -36,15 +36,15 @@ data class HaiUiMetrics(
 private val DefaultHaiUiMetrics = HaiUiMetrics(
     phone = true,
     compact = false,
-    pagePadding = 12.dp,
-    sectionGap = 6.dp,
-    cardRadius = 18.dp,
-    smallRadius = 13.dp,
-    headerHeight = 66.dp,
-    bottomNavHeight = 70.dp,
-    chromeButtonSize = 32.dp,
-    minimumTouchTarget = 44.dp,
-    mapHeight = 235.dp
+    pagePadding = 14.dp,
+    sectionGap = 8.dp,
+    cardRadius = 20.dp,
+    smallRadius = 14.dp,
+    headerHeight = 72.dp,
+    bottomNavHeight = 78.dp,
+    chromeButtonSize = 36.dp,
+    minimumTouchTarget = 48.dp,
+    mapHeight = 260.dp
 )
 
 val LocalHaiUiMetrics = staticCompositionLocalOf { DefaultHaiUiMetrics }
@@ -62,7 +62,7 @@ fun HaiUiScaleProvider(content: @Composable () -> Unit) {
     } else {
         1f
     }
-    val controlledFontScale = parentDensity.fontScale.coerceIn(1.00f, 1.08f)
+    val controlledFontScale = parentDensity.fontScale.coerceIn(1.00f, 1.15f)
     val controlledDensity = remember(parentDensity.density, controlledFontScale, densityFactor) {
         Density(
             density = parentDensity.density * densityFactor,

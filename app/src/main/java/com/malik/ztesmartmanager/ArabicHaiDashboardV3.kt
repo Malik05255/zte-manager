@@ -204,14 +204,13 @@ fun ArabicHaiDashboardV3(
                     return@Column
                 }
 
-                Box(Modifier.weight(1f)) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
+                LazyColumn(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(
                             start = layout.padding.dp,
                             end = layout.padding.dp,
                             top = 4.dp,
-                            bottom = (layout.bottomBarHeight + layout.gap).dp
+                            bottom = (layout.gap * 2).dp
                         ),
                         verticalArrangement = Arrangement.spacedBy(layout.gap.dp)
                     ) {
@@ -297,9 +296,8 @@ fun ArabicHaiDashboardV3(
                                 )
                             }
                         }
-                    }
-                    M3BottomNav(section, { section = it }, Modifier.align(Alignment.BottomCenter))
                 }
+                M3BottomNav(section) { section = it }
             }
         }
     }
@@ -618,8 +616,8 @@ private fun M3Tools(
 private fun M3Logs(layout: M3Layout, samples: List<SafeTelemetrySample>, performance: NetworkPerformance?) {
     M3Card(layout) {
         Column(Modifier.padding(16.dp)) {
-            Text("السجلات الحية", color = M3Ink, fontSize = m3sp(layout, 20), fontWeight = FontWeight.Black)
-            Text("آخر القراءات التي استلمها التطبيق فعلًا من الراوتر", color = M3Muted, fontSize = m3sp(layout, 11))
+            Text("السجلات الحية", color = M3Ink, fontSize = m3sp(layout, 24), fontWeight = FontWeight.Black)
+            Text("آخر القراءات التي استلمها التطبيق فعلًا من الراوتر", color = M3Muted, fontSize = m3sp(layout, 13), lineHeight = m3sp(layout, 18))
             performance?.let {
                 Spacer(Modifier.height(10.dp))
                 Text(

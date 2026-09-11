@@ -36,7 +36,7 @@ object HaiResponsivePolicy {
         val widthScale = (widthDp / REFERENCE_WIDTH_DP.toFloat()).coerceIn(0.90f, 1.12f)
         // Height may make a page scroll, but it must never inflate its geometry.
         val scale = widthScale.coerceIn(0.94f, 1.10f)
-        val textScale = widthScale.coerceIn(1.00f, 1.08f)
+        val textScale = (widthScale * 1.08f).coerceIn(1.08f, 1.16f)
 
         val sizeClass = when {
             widthDp < 370 -> HaiSizeClass.COMPACT
@@ -47,14 +47,14 @@ object HaiResponsivePolicy {
         val twoColumn = widthDp >= TWO_COLUMN_MIN_WIDTH_DP
 
         val horizontalPadding = when (sizeClass) {
-            HaiSizeClass.COMPACT -> 10
-            HaiSizeClass.STANDARD -> 12
-            HaiSizeClass.LARGE -> 18
+            HaiSizeClass.COMPACT -> 12
+            HaiSizeClass.STANDARD -> 14
+            HaiSizeClass.LARGE -> 20
         }
         val sectionGap = when (sizeClass) {
-            HaiSizeClass.COMPACT -> 5
-            HaiSizeClass.STANDARD -> 6
-            HaiSizeClass.LARGE -> 10
+            HaiSizeClass.COMPACT -> 7
+            HaiSizeClass.STANDARD -> 8
+            HaiSizeClass.LARGE -> 12
         }
 
         return HaiLayoutSpec(
@@ -66,31 +66,31 @@ object HaiResponsivePolicy {
             horizontalPaddingDp = horizontalPadding,
             sectionGapDp = sectionGap,
             cardRadiusDp = when (sizeClass) {
-                HaiSizeClass.COMPACT -> 16
-                HaiSizeClass.STANDARD -> 18
-                HaiSizeClass.LARGE -> 20
+                HaiSizeClass.COMPACT -> 18
+                HaiSizeClass.STANDARD -> 20
+                HaiSizeClass.LARGE -> 22
             },
             networkCardHeightDp = when {
                 twoColumn -> 220
-                sizeClass == HaiSizeClass.COMPACT -> 148
-                else -> 156
+                sizeClass == HaiSizeClass.COMPACT -> 160
+                else -> 172
             },
             speedCardHeightDp = when {
                 twoColumn -> 220
-                sizeClass == HaiSizeClass.COMPACT -> 126
-                else -> 132
+                sizeClass == HaiSizeClass.COMPACT -> 140
+                else -> 150
             },
             mapCardHeightDp = when {
-                sizeClass == HaiSizeClass.LARGE -> 260
-                else -> 235
+                sizeClass == HaiSizeClass.LARGE -> 290
+                else -> 260
             },
             signalCardHeightDp = when {
-                sizeClass == HaiSizeClass.LARGE -> 190
-                else -> 170
+                sizeClass == HaiSizeClass.LARGE -> 205
+                else -> 184
             },
             bottomBarHeightDp = when (sizeClass) {
-                HaiSizeClass.LARGE -> 74
-                else -> 70
+                HaiSizeClass.LARGE -> 82
+                else -> 78
             }
         )
     }

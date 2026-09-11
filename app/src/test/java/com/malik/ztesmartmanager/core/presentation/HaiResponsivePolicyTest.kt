@@ -13,12 +13,12 @@ class HaiResponsivePolicyTest {
         assertFalse(spec.twoColumn)
         assertTrue(spec.textScale >= 1.00f)
         assertTrue(spec.scale >= 0.94f)
-        assertEquals(10, spec.horizontalPaddingDp)
-        assertEquals(5, spec.sectionGapDp)
-        assertEquals(16, spec.cardRadiusDp)
-        assertEquals(148, spec.networkCardHeightDp)
-        assertEquals(126, spec.speedCardHeightDp)
-        assertEquals(70, spec.bottomBarHeightDp)
+        assertEquals(14, spec.horizontalPaddingDp)
+        assertEquals(7, spec.sectionGapDp)
+        assertEquals(20, spec.cardRadiusDp)
+        assertEquals(160, spec.networkCardHeightDp)
+        assertEquals(140, spec.speedCardHeightDp)
+        assertEquals(78, spec.bottomBarHeightDp)
     }
 
     @Test
@@ -26,13 +26,13 @@ class HaiResponsivePolicyTest {
         val spec = HaiResponsivePolicy.resolve(390, 844)
         assertEquals(HaiSizeClass.STANDARD, spec.sizeClass)
         assertFalse(spec.twoColumn)
-        assertEquals(12, spec.horizontalPaddingDp)
-        assertEquals(6, spec.sectionGapDp)
-        assertEquals(18, spec.cardRadiusDp)
-        assertEquals(156, spec.networkCardHeightDp)
-        assertEquals(132, spec.speedCardHeightDp)
-        assertEquals(70, spec.bottomBarHeightDp)
-        assertTrue(spec.textScale in 1.00f..1.01f)
+        assertEquals(14, spec.horizontalPaddingDp)
+        assertEquals(8, spec.sectionGapDp)
+        assertEquals(20, spec.cardRadiusDp)
+        assertEquals(172, spec.networkCardHeightDp)
+        assertEquals(150, spec.speedCardHeightDp)
+        assertEquals(78, spec.bottomBarHeightDp)
+        assertTrue(spec.textScale in 1.08f..1.09f)
     }
 
     @Test
@@ -58,13 +58,13 @@ class HaiResponsivePolicyTest {
         assertFalse(spec.twoColumn)
         assertFalse(spec.denseHeader)
         assertTrue(spec.scale in 1.09f..1.10f)
-        assertEquals(1.08f, spec.textScale, 0.0001f)
-        assertEquals(12, spec.horizontalPaddingDp)
-        assertEquals(6, spec.sectionGapDp)
-        assertEquals(18, spec.cardRadiusDp)
-        assertEquals(156, spec.networkCardHeightDp)
-        assertEquals(132, spec.speedCardHeightDp)
-        assertEquals(70, spec.bottomBarHeightDp)
+        assertEquals(1.16f, spec.textScale, 0.0001f)
+        assertEquals(14, spec.horizontalPaddingDp)
+        assertEquals(8, spec.sectionGapDp)
+        assertEquals(20, spec.cardRadiusDp)
+        assertEquals(172, spec.networkCardHeightDp)
+        assertEquals(150, spec.speedCardHeightDp)
+        assertEquals(78, spec.bottomBarHeightDp)
     }
 
     @Test
@@ -72,7 +72,7 @@ class HaiResponsivePolicyTest {
         val spec = HaiResponsivePolicy.resolve(412, 915)
         assertEquals(HaiSizeClass.STANDARD, spec.sizeClass)
         assertFalse(spec.twoColumn)
-        assertTrue(spec.textScale in 1.04f..1.06f)
+        assertTrue(spec.textScale in 1.12f..1.14f)
         assertTrue(spec.networkCardHeightDp > spec.speedCardHeightDp)
     }
 
@@ -97,6 +97,6 @@ class HaiResponsivePolicyTest {
         assertEquals(HaiSizeClass.LARGE, spec.sizeClass)
         assertTrue(spec.twoColumn)
         assertTrue(spec.scale <= 1.10f)
-        assertTrue(spec.textScale <= 1.08f)
+        assertTrue(spec.textScale <= 1.16f)
     }
 }

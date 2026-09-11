@@ -22,7 +22,7 @@ class MobileUiV2ReadabilityTest {
     fun responsivePolicy_isWidthDrivenAndDoesNotInflateTallPhones() {
         val policy = File("src/main/java/com/malik/ztesmartmanager/core/presentation/HaiResponsivePolicy.kt").readText()
         assertTrue(policy.contains("REFERENCE_WIDTH_DP = 393"))
-        assertTrue(policy.contains("widthScale.coerceIn(1.00f, 1.08f)"))
+        assertTrue(policy.contains("(widthScale * 1.08f).coerceIn(1.08f, 1.16f)"))
         assertTrue(
             "يجب ألا يدخل heightScale في تكبير واجهة الهاتف الطويل",
             !policy.contains("val heightScale")
@@ -61,11 +61,11 @@ class MobileUiV2ReadabilityTest {
 
         assertTrue(entry.contains("HaiHomeDashboardV4("))
         assertTrue(home.contains("verticalScroll(rememberScrollState())"))
-        assertTrue(home.contains("height(176.dp)"))
-        assertTrue(home.contains("height(64.dp)"))
-        assertTrue(home.contains("height(160.dp)"))
-        assertTrue(home.contains("height(134.dp)"))
-        assertTrue(home.contains("height(112.dp)"))
+        assertTrue(home.contains("height(H4.HeroHeight)"))
+        assertTrue(home.contains("height(H4.MetricHeight)"))
+        assertTrue(home.contains("height(H4.MiddleRowHeight)"))
+        assertTrue(home.contains("height(H4.TowerRowHeight)"))
+        assertTrue(home.contains("height(H4.BottomRowHeight)"))
         assertTrue(home.contains("H4Gauge("))
         assertTrue(home.contains("H4MiniMap("))
         assertTrue(home.contains("H4Bands("))
