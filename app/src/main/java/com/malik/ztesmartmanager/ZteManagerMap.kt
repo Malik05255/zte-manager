@@ -12,25 +12,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,24 +39,21 @@ import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.PropertyFactory
 import org.maplibre.android.style.sources.GeoJsonSource
 
-private const val PULSE_MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty"
-private const val PULSE_USER_SOURCE = "pulse-user-source"
-private const val PULSE_TOWER_SOURCE = "pulse-tower-source"
-private const val PULSE_LINK_SOURCE = "pulse-link-source"
-private const val PULSE_USER_LAYER = "pulse-user-layer"
-private const val PULSE_TOWER_LAYER = "pulse-tower-layer"
-private const val PULSE_LINK_LAYER = "pulse-link-layer"
-private const val EMPTY_GEOJSON = "{\"type\":\"FeatureCollection\",\"features\":[]}"
+private const val ZTE_MAP_STYLE = "https://tiles.openfreemap.org/styles/liberty"
+private const val ZTE_USER_SOURCE = "zte-user-source"
+private const val ZTE_TOWER_SOURCE = "zte-tower-source"
+private const val ZTE_LINK_SOURCE = "zte-link-source"
+private const val ZTE_USER_LAYER = "zte-user-layer"
+private const val ZTE_TOWER_LAYER = "zte-tower-layer"
+private const val ZTE_LINK_LAYER = "zte-link-layer"
+private const val ZTE_EMPTY_GEOJSON = "{\"type\":\"FeatureCollection\",\"features\":[]}"
 
-private data class VerifiedTowerCoordinate(val latitude: Double, val longitude: Double)
+private data class ZteVerifiedTowerCoordinate(val latitude: Double, val longitude: Double)
 
 @Composable
-internal fun PulseNetworkMap(
-    snapshot: RouterSnapshot,
-    modifier: Modifier = Modifier
-) {
+internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val verifiedTower = remember(snapshot.raw) { verifiedTowerCoordinate(snapshot) }
+    val verifiedTower = remember(snapshot.raw) { zteVerifiedTowerCoordinate(snapshot) }
     var map by remember { mutableStateOf<MapLibreMap?>(null) }
     var userSource by remember { mutableStateOf<GeoJsonSource?>(null) }
     var towerSource by remember { mutableStateOf<GeoJsonSource?>(null) }
@@ -79,9 +62,9 @@ internal fun PulseNetworkMap(
     var message by remember(verifiedTower) {
         mutableStateOf(
             if (verifiedTower == null) {
-                "سنحدد موقعك بدقة. الراوتر لم يرسل موقعًا جغرافيًا موثقًا للبرج، لذلك لن نرسم خطًا وهميًا."
+                "سيظهر موقعك الحقيقي. الراوتر لم يرسل إحداثيات موثقة للبرج، لذلك لن نرسم خطًا وهميًا."
             } else {
-                "موقع البرج متوفر من بيانات موثقة في الراوتر؛ سنرسم الاتصال الحقيقي بعد تحديد موقعك."
+                "إحداثيات البرج موثقة من بيانات الراوتر، وسيظهر خط الاتصال بعد تحديد موقعك."
             }
         )
     }
@@ -97,36 +80,36 @@ internal fun PulseNetworkMap(
                     isLogoEnabled = false
                     isAttributionEnabled = true
                 }
-                readyMap.setStyle(Style.Builder().fromUri(PULSE_MAP_STYLE)) { style ->
-                    val users = GeoJsonSource(PULSE_USER_SOURCE, EMPTY_GEOJSON)
-                    val towers = GeoJsonSource(PULSE_TOWER_SOURCE, EMPTY_GEOJSON)
-                    val links = GeoJsonSource(PULSE_LINK_SOURCE, EMPTY_GEOJSON)
+                readyMap.setStyle(Style.Builder().fromUri(ZTE_MAP_STYLE)) { style ->
+                    val users = GeoJsonSource(ZTE_USER_SOURCE, ZTE_EMPTY_GEOJSON)
+                    val towers = GeoJsonSource(ZTE_TOWER_SOURCE, ZTE_EMPTY_GEOJSON)
+                    val links = GeoJsonSource(ZTE_LINK_SOURCE, ZTE_EMPTY_GEOJSON)
                     style.addSource(users)
                     style.addSource(towers)
                     style.addSource(links)
 
                     style.addLayer(
-                        LineLayer(PULSE_LINK_LAYER, PULSE_LINK_SOURCE).withProperties(
-                            PropertyFactory.lineColor(AndroidColor.parseColor("#20C888")),
-                            PropertyFactory.lineWidth(4.0f),
-                            PropertyFactory.lineOpacity(0.82f)
+                        LineLayer(ZTE_LINK_LAYER, ZTE_LINK_SOURCE).withProperties(
+                            PropertyFactory.lineColor(AndroidColor.parseColor("#0B7CFF")),
+                            PropertyFactory.lineWidth(4.5f),
+                            PropertyFactory.lineOpacity(0.86f)
                         )
                     )
                     style.addLayer(
-                        CircleLayer(PULSE_USER_LAYER, PULSE_USER_SOURCE).withProperties(
-                            PropertyFactory.circleColor(AndroidColor.parseColor("#176BFF")),
-                            PropertyFactory.circleRadius(8.0f),
+                        CircleLayer(ZTE_USER_LAYER, ZTE_USER_SOURCE).withProperties(
+                            PropertyFactory.circleColor(AndroidColor.parseColor("#123A91")),
+                            PropertyFactory.circleRadius(9.0f),
                             PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
-                            PropertyFactory.circleStrokeWidth(3.0f),
+                            PropertyFactory.circleStrokeWidth(3.5f),
                             PropertyFactory.circleOpacity(1.0f)
                         )
                     )
                     style.addLayer(
-                        CircleLayer(PULSE_TOWER_LAYER, PULSE_TOWER_SOURCE).withProperties(
-                            PropertyFactory.circleColor(AndroidColor.parseColor("#20C888")),
-                            PropertyFactory.circleRadius(9.0f),
+                        CircleLayer(ZTE_TOWER_LAYER, ZTE_TOWER_SOURCE).withProperties(
+                            PropertyFactory.circleColor(AndroidColor.parseColor("#19C5E8")),
+                            PropertyFactory.circleRadius(10.0f),
                             PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
-                            PropertyFactory.circleStrokeWidth(3.0f),
+                            PropertyFactory.circleStrokeWidth(3.5f),
                             PropertyFactory.circleOpacity(1.0f)
                         )
                     )
@@ -154,7 +137,7 @@ internal fun PulseNetworkMap(
     }
 
     fun locate() {
-        val location = bestRecentLocation(context)
+        val location = zteBestRecentLocation(context)
         if (location == null) {
             message = "لم نحصل على موقع حديث من الهاتف. فعّل خدمات الموقع ثم جرّب مرة أخرى."
             return
@@ -167,11 +150,11 @@ internal fun PulseNetworkMap(
             return
         }
 
-        users.setGeoJson(pointGeoJson(location.latitude, location.longitude))
+        users.setGeoJson(ztePointGeoJson(location.latitude, location.longitude))
         val tower = verifiedTower
         if (tower != null) {
-            towers.setGeoJson(pointGeoJson(tower.latitude, tower.longitude))
-            links.setGeoJson(lineGeoJson(location.latitude, location.longitude, tower.latitude, tower.longitude))
+            towers.setGeoJson(ztePointGeoJson(tower.latitude, tower.longitude))
+            links.setGeoJson(zteLineGeoJson(location.latitude, location.longitude, tower.latitude, tower.longitude))
 
             val results = FloatArray(1)
             Location.distanceBetween(location.latitude, location.longitude, tower.latitude, tower.longitude, results)
@@ -186,15 +169,15 @@ internal fun PulseNetworkMap(
                 else -> 8.0
             }
             map?.cameraPosition = CameraPosition.Builder().target(LatLng(midLat, midLon)).zoom(zoom).build()
-            message = "تم تحديد موقعك والبرج ورسم خط الاتصال بينهما من إحداثيات موثقة."
+            message = "تم تحديد موقعك والبرج ورسم خط الاتصال من إحداثيات موثقة."
         } else {
-            towers.setGeoJson(EMPTY_GEOJSON)
-            links.setGeoJson(EMPTY_GEOJSON)
+            towers.setGeoJson(ZTE_EMPTY_GEOJSON)
+            links.setGeoJson(ZTE_EMPTY_GEOJSON)
             map?.cameraPosition = CameraPosition.Builder()
                 .target(LatLng(location.latitude, location.longitude))
                 .zoom(14.8)
                 .build()
-            message = "موقعك ظاهر الآن. موقع البرج الجغرافي غير متوفر من الراوتر؛ نعرض الحقيقة بدل خط تخميني."
+            message = "موقعك ظاهر الآن. موقع البرج غير متوفر من الراوتر؛ نعرض الحقيقة بدل خط تخميني."
         }
     }
 
@@ -211,59 +194,54 @@ internal fun PulseNetworkMap(
         if (mapReady && locationAllowed) locate()
     }
 
-    Box(modifier.clip(RoundedCornerShape(26.dp)).background(Color(0xFFE9EFF5))) {
+    Box(modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xFFE9F1FA))) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
         Row(
             Modifier.align(Alignment.TopStart)
-                .padding(10.dp)
+                .padding(12.dp)
                 .clip(RoundedCornerShape(50))
-                .background(Color.White.copy(alpha = 0.94f))
-                .padding(horizontal = 10.dp, vertical = 7.dp),
+                .background(Color.White.copy(alpha = 0.96f))
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF176BFF)))
-            Spacer(Modifier.size(5.dp))
-            Text("أنت", color = Color(0xFF0C1D33), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.size(10.dp))
-            Box(Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF20C888)))
-            Spacer(Modifier.size(5.dp))
-            Text("البرج", color = Color(0xFF0C1D33), fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.size(9.dp).clip(CircleShape).background(ZteDeepBlue))
+            Spacer(Modifier.width(6.dp))
+            Text("أنت", color = ZteInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.width(12.dp))
+            Box(Modifier.size(9.dp).clip(CircleShape).background(ZteCyan))
+            Spacer(Modifier.width(6.dp))
+            Text("البرج", color = ZteInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         }
 
         Column(
             Modifier.align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(10.dp)
+                .padding(12.dp)
                 .clip(RoundedCornerShape(18.dp))
-                .background(Color.White.copy(alpha = 0.96f))
-                .padding(11.dp)
+                .background(Color.White.copy(alpha = 0.97f))
+                .padding(12.dp)
         ) {
-            Text(message, color = Color(0xFF21344D), fontSize = 11.sp, lineHeight = 16.sp)
-            Spacer(Modifier.height(8.dp))
+            Text(message, color = ZteInk, fontSize = 13.sp, lineHeight = 18.sp)
+            Spacer(Modifier.height(9.dp))
             Box(
                 Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xFF0C1D33))
+                    .clip(RoundedCornerShape(15.dp))
+                    .background(ZteBlue)
                     .clickable {
                         if (locationAllowed) locate()
                         else launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
-                    .padding(vertical = 11.dp),
+                    .padding(vertical = 12.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    if (locationAllowed) "حدّث موقعي" else "اسمح بتحديد موقعي",
-                    color = Color.White,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                Text(if (locationAllowed) "حدّث موقعي" else "اسمح بتحديد موقعي", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
             }
         }
     }
 }
 
-private fun verifiedTowerCoordinate(snapshot: RouterSnapshot): VerifiedTowerCoordinate? {
+private fun zteVerifiedTowerCoordinate(snapshot: RouterSnapshot): ZteVerifiedTowerCoordinate? {
     val pairs = listOf(
         "tower_lat" to "tower_lng",
         "tower_lat" to "tower_lon",
@@ -277,20 +255,20 @@ private fun verifiedTowerCoordinate(snapshot: RouterSnapshot): VerifiedTowerCoor
         val lat = snapshot.raw[latKey]?.trim()?.toDoubleOrNull() ?: continue
         val lon = snapshot.raw[lonKey]?.trim()?.toDoubleOrNull() ?: continue
         if (lat in -90.0..90.0 && lon in -180.0..180.0 && !(lat == 0.0 && lon == 0.0)) {
-            return VerifiedTowerCoordinate(lat, lon)
+            return ZteVerifiedTowerCoordinate(lat, lon)
         }
     }
     return null
 }
 
-private fun pointGeoJson(latitude: Double, longitude: Double): String =
+private fun ztePointGeoJson(latitude: Double, longitude: Double): String =
     "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"properties\":{},\"geometry\":{\"type\":\"Point\",\"coordinates\":[$longitude,$latitude]}}]}"
 
-private fun lineGeoJson(userLat: Double, userLon: Double, towerLat: Double, towerLon: Double): String =
+private fun zteLineGeoJson(userLat: Double, userLon: Double, towerLat: Double, towerLon: Double): String =
     "{\"type\":\"FeatureCollection\",\"features\":[{\"type\":\"Feature\",\"properties\":{},\"geometry\":{\"type\":\"LineString\",\"coordinates\":[[$userLon,$userLat],[$towerLon,$towerLat]]}}]}"
 
 @SuppressLint("MissingPermission")
-private fun bestRecentLocation(context: Context): Location? {
+private fun zteBestRecentLocation(context: Context): Location? {
     val manager = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return null
     return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
         .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
