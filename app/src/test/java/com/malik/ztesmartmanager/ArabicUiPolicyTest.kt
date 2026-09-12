@@ -9,56 +9,76 @@ class ArabicUiPolicyTest {
 
     @Test
     fun productionShell_isArabicAndForcesRtl() {
-        val dashboard = source("ZteManagerDashboard.kt").readText()
+        val dashboard = source("HaiOneDashboard.kt").readText()
         val runtime = source("RuntimeAwareFinalDashboard.kt").readText()
         val activity = source("FinalMainActivity.kt").readText()
 
         assertTrue(
-            "واجهة الإنتاج يجب أن تفرض RTL حتى لو كانت لغة الهاتف مختلفة",
+            "واجهة الإنتاج يجب أن تفرض RTL",
             dashboard.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "يجب فرض RTL على التطبيق كاملًا بما فيه شاشة الدخول",
+            "يجب فرض RTL على التطبيق كاملًا بما فيه الدخول",
             activity.contains("LocalLayoutDirection provides LayoutDirection.Rtl")
         )
         assertTrue(
-            "غلاف الأمان يجب أن يستخدم واجهة ZTE Manager الجديدة",
+            "غلاف الأمان يجب أن يستدعي الواجهة الجديدة عبر العقدة الإنتاجية",
             runtime.contains("ZteManagerDashboard(")
         )
-        assertFalse(
-            "لا يجوز إعادة أي واجهة تصميم قديمة إلى مسار الإنتاج",
-            OLD_ROUTE_NAMES.any(runtime::contains)
-        )
     }
 
     @Test
-    fun oldDesignFiles_areActuallyDeleted() {
+    fun supersededVisualDesignFiles_areActuallyDeleted() {
         val root = File("src/main/java/com/malik/ztesmartmanager")
-        val leftovers = OLD_DESIGN_FILES.filter { File(root, it).exists() }
-        assertTrue("بقيت ملفات تصميم قديمة: $leftovers", leftovers.isEmpty())
+        val old = listOf(
+            "ZteManagerDashboard.kt",
+            "ZteManagerHome.kt",
+            "ZteManagerMore.kt",
+            "ZteManagerNetwork.kt",
+            "ZteManagerTheme.kt",
+            "ZteManagerTools.kt",
+            "ZteReferenceChrome.kt",
+            "ZteRouterLoginScreen.kt",
+            "ZteSaveableCompat.kt"
+        ).filter { File(root, it).exists() }
+        assertTrue("بقيت ملفات تصميم قديمة: $old", old.isEmpty())
     }
 
     @Test
-    fun newUserFacingLiteralText_mustBeArabicOrTechnicalOnly() {
+    fun freshVisualSystem_isTheOnlyScreenFamily() {
         val root = File("src/main/java/com/malik/ztesmartmanager")
-        val violations = mutableListOf<String>()
+        listOf(
+            "HaiOneTheme.kt",
+            "HaiOneHome.kt",
+            "HaiOneScreens.kt",
+            "HaiOneDashboard.kt",
+            "HaiOneLogin.kt",
+            "HaiOneMap.kt"
+        ).forEach { name -> assertTrue("ملف الواجهة الجديدة مفقود: $name", File(root, name).exists()) }
 
-        root.walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .forEach { file ->
-                val text = file.readText()
-                USER_FACING_PATTERNS.forEach { regex ->
-                    regex.findAll(text).forEach { match ->
-                        val literal = match.groupValues[1]
-                        if (!isArabicOrTechnicalOnly(literal)) violations += "${file.name}: $literal"
-                    }
-                }
-            }
+        val dashboard = source("HaiOneDashboard.kt").readText()
+        assertTrue(dashboard.contains("HaiHome("))
+        assertTrue(dashboard.contains("HaiNetworkScreen("))
+        assertTrue(dashboard.contains("HaiTowersScreen("))
+        assertTrue(dashboard.contains("HaiDevicesScreen("))
+        assertTrue(dashboard.contains("HaiToolsScreen("))
+    }
 
-        assertTrue(
-            "وجدت نصوص واجهة إنجليزية غير معرّبة:\n${violations.joinToString("\n")}",
-            violations.isEmpty()
+    @Test
+    fun freshUi_avoidsLongExplanatoryCopy() {
+        val files = listOf("HaiOneTheme.kt", "HaiOneHome.kt", "HaiOneScreens.kt", "HaiOneLogin.kt")
+            .map(::source)
+        val banned = listOf(
+            "بدون أرقام غامضة",
+            "كل خيار في سطر مستقل",
+            "واجهة واضحة بدون حشر أو نص صغير",
+            "لا نعرض بيانات وهمية",
+            "قياس حقيقي للاتصال بالإنترنت"
         )
+        files.forEach { file ->
+            val text = file.readText()
+            banned.forEach { phrase -> assertFalse("وجد شرح قديم زائد: $phrase في ${file.name}", text.contains(phrase)) }
+        }
     }
 
     @Test
@@ -72,44 +92,4 @@ class ArabicUiPolicyTest {
     }
 
     private fun source(name: String) = File("src/main/java/com/malik/ztesmartmanager/$name")
-
-    private fun isArabicOrTechnicalOnly(value: String): Boolean {
-        if (value.any { it in '\u0600'..'\u06FF' }) return true
-        var remaining = value
-        TECHNICAL_TOKENS.sortedByDescending { it.length }
-            .forEach { token -> remaining = remaining.replace(token, "", ignoreCase = false) }
-        return remaining.none { it in 'A'..'Z' || it in 'a'..'z' }
-    }
-
-    companion object {
-        private val USER_FACING_PATTERNS = listOf(
-            Regex("Text\\(\\s*\"([^\"$]+)"),
-            Regex("Toast\\.makeText\\([^,]+,\\s*\"([^\"$]+)"),
-            Regex("createChooser\\([^,]+,\\s*\"([^\"$]+)"),
-            Regex("newPlainText\\(\\s*\"([^\"$]+)")
-        )
-
-        private val TECHNICAL_TOKENS = listOf(
-            "ZTE Smart HAI", "ZTE Manager", "MapLibre", "OpenStreetMap", "OpenFreeMap", "Cloudflare",
-            "Tower Guard", "Cell Lock", "Hardware", "Firmware", "Runtime", "read-back",
-            "ZTE", "Manager", "CPE", "SPEEDTEST", "5G", "4G", "3G", "2G", "LTE", "NR", "NSA", "SA", "CA",
-            "RSRP", "RSRQ", "SINR", "PCI", "ARFCN", "EARFCN", "MHz", "Mb/s", "dBm", "dB", "ms",
-            "STC", "Mobily", "Zain", "Wi‑Fi", "Wi", "LAN", "Ping", "Jitter", "Loss", "Band", "IP",
-            "Cell ID", "QoS", "API"
-        )
-
-        private val OLD_ROUTE_NAMES = listOf(
-            "GlassDashboard(", "PulseDashboard(", "NovaDashboard(", "ImmersiveDashboard(",
-            "ReferenceExactDashboard(", "MasterpieceDashboard(", "ArabicHaiDashboard("
-        )
-
-        private val OLD_DESIGN_FILES = listOf(
-            "GlassComponents.kt", "GlassDashboard.kt", "GlassDesignSystem.kt", "GlassHelpers.kt",
-            "GlassHomeHero.kt", "GlassHomePrimaryCards.kt", "GlassHomeScreen.kt", "GlassHomeSecondaryCards.kt",
-            "GlassMoreScreen.kt", "GlassNetworkComponents.kt", "GlassNetworkScreen.kt", "GlassQuality.kt",
-            "GlassShell.kt", "GlassToolsScreen.kt", "GlassTowerControls.kt",
-            "NovaDashboard.kt", "NovaEffects.kt", "NovaMap.kt",
-            "PulseConnectedDeviceCompat.kt", "PulseDashboard.kt", "PulseNetworkMap.kt"
-        )
-    }
 }

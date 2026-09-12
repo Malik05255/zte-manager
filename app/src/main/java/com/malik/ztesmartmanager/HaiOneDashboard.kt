@@ -5,9 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityReport
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetrySample
 import com.malik.ztesmartmanager.core.diagnostics.ThermalTelemetry
@@ -76,7 +79,7 @@ fun ZteManagerDashboard(
     onShareDiagnostics: () -> Unit
 ) {
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-        var screen by remember { mutableStateOf(ZteScreen.HOME) }
+        var screen by rememberSaveable { mutableStateOf(HaiScreen.HOME) }
         val wifi = remember(snapshot?.raw?.get("station_list")) {
             ConnectedDeviceParser.parseValue(snapshot?.raw?.get("station_list"), DeviceTransport.WIFI)
         }
@@ -84,69 +87,76 @@ fun ZteManagerDashboard(
             ConnectedDeviceParser.parseValue(snapshot?.raw?.get("lan_station_list"), DeviceTransport.LAN)
         }
         val devices = remember(wifi, lan) { ConnectedDeviceParser.merge(wifi, lan) }
-        val quality = remember(snapshot) { snapshot?.let { NetworkQualityEngine().score(it) } }
+        val quality = remember(snapshot) { snapshot?.let { NetworkQualityEngine().score(it).total } ?: 0 }
 
-        BackHandler(enabled = screen != ZteScreen.HOME) { screen = ZteScreen.HOME }
+        BackHandler(enabled = screen != HaiScreen.HOME) { screen = HaiScreen.HOME }
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-            containerColor = ZteBg,
-            topBar = {
-                ZteReferenceTopBar(
-                    connected = snapshot != null,
-                    sectionTitle = when (screen) {
-                        ZteScreen.HOME -> "ZTE Manager"
-                        ZteScreen.NETWORK -> "الشبكة والترددات"
-                        ZteScreen.TOOLS -> "الأدوات الذكية"
-                        ZteScreen.MORE -> "المزيد"
-                    },
-                    onMenu = { screen = ZteScreen.MORE },
-                    onSettings = { screen = ZteScreen.MORE }
-                )
-            },
-            bottomBar = { ZteReferenceBottomBar(screen) { screen = it } }
+            containerColor = HaiBg,
+            topBar = { HaiTopBar(snapshot != null) },
+            bottomBar = { HaiBottomBar(screen) { screen = it } }
         ) { padding ->
-            Box(Modifier.fillMaxSize().background(ZteBg).padding(padding)) {
+            Box(Modifier.fillMaxSize().background(HaiBg).padding(padding)) {
                 if (snapshot == null) {
-                    ZteDisconnectedState(status.ifBlank { "جاري الاتصال بالراوتر" })
+                    HaiDisconnected(status.ifBlank { "جاري الاتصال" })
                 } else when (screen) {
-                    ZteScreen.HOME -> ZteManagerHome(
+                    HaiScreen.HOME -> HaiHome(
                         snapshot = snapshot,
-                        qualityScore = quality?.total ?: 0,
-                        traffic = traffic,
+                        qualityScore = quality,
                         telemetrySamples = telemetrySamples,
-                        stability = stability,
                         lastPerformance = lastPerformance,
                         speedBusy = speedBusy,
                         placementMode = placementMode,
                         placementReading = placementReading,
-                        deviceCount = devices.size,
+                        devices = devices,
                         controlBusy = controlBusy,
+                        scanBusy = scanBusy,
                         operationMessage = operationMessage,
-                        status = status,
                         onSpeedTest = onSpeedTest,
                         onPlacementToggle = onPlacementToggle,
                         onSetNetworkMode = onSetNetworkMode,
-                        onOpenNetwork = { screen = ZteScreen.NETWORK },
-                        onOpenTools = { screen = ZteScreen.TOOLS },
-                        onOpenMore = { screen = ZteScreen.MORE }
+                        onScanCells = onScanCells,
+                        onLockCurrentCell = onLockCurrentCell,
+                        onOpenNetwork = { screen = HaiScreen.NETWORK },
+                        onOpenTowers = { screen = HaiScreen.TOWERS },
+                        onOpenDevices = { screen = HaiScreen.DEVICES },
+                        onOpenTools = { screen = HaiScreen.TOOLS }
                     )
-                    ZteScreen.NETWORK -> ZteManagerNetwork(
-                        snapshot, capabilities, selectedLte, selectedNr, controlBusy, scanBusy,
-                        nearbyCells, towerTarget, towerGuardEnabled, towerGuardStatus,
-                        onSetNetworkMode, onLteToggle, onNrToggle, onApplyLte, onApplyNr,
-                        onScanCells, onLockCurrentCell, onLockNearbyCell, onClearCellLock,
-                        onTowerGuardChange
+                    HaiScreen.NETWORK -> HaiNetworkScreen(snapshot, capabilities, selectedLte, selectedNr, controlBusy, onSetNetworkMode, onLteToggle, onNrToggle, onApplyLte, onApplyNr)
+                    HaiScreen.TOWERS -> HaiTowersScreen(snapshot, nearbyCells, scanBusy, controlBusy, towerTarget, towerGuardEnabled, towerGuardStatus, onScanCells, onLockCurrentCell, onLockNearbyCell, onClearCellLock, onTowerGuardChange)
+                    HaiScreen.DEVICES -> HaiDevicesScreen(devices)
+                    HaiScreen.TOOLS -> HaiToolsScreen(
+                        snapshot = snapshot,
+                        placementMode = placementMode,
+                        placementReading = placementReading,
+                        smartMode = smartMode,
+                        smartGoal = smartGoal,
+                        smartBusy = smartBusy,
+                        safetyBackupAvailable = safetyBackupAvailable,
+                        controlBusy = controlBusy,
+                        supportsAntennaControl = capabilities.supportsAntennaControl,
+                        onPlacementToggle = onPlacementToggle,
+                        onSmartModeChange = onSmartModeChange,
+                        onSmartGoalChange = onSmartGoalChange,
+                        onOptimizeNow = onOptimizeNow,
+                        onAntennaState = onAntennaState,
+                        onRestoreSafetyBackup = onRestoreSafetyBackup,
+                        onCopyDiagnostics = onCopyDiagnostics,
+                        onShareDiagnostics = onShareDiagnostics,
+                        onDisconnect = onDisconnect
                     )
-                    ZteScreen.TOOLS -> ZteManagerTools(
-                        snapshot, capabilities, runtime, thermal, placementMode, placementReading,
-                        smartMode, smartGoal, smartBusy, smartReport, safetyBackupAvailable, controlBusy,
-                        onPlacementToggle, onSmartModeChange, onSmartGoalChange, onOptimizeNow,
-                        onAntennaState, onRestoreSafetyBackup, onCopyDiagnostics, onShareDiagnostics
-                    )
-                    ZteScreen.MORE -> ZteManagerMore(snapshot, traffic, devices, onDisconnect)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HaiDisconnected(message: String) {
+    Box(Modifier.fillMaxSize(), contentAlignment = androidx.compose.ui.Alignment.Center) {
+        HaiCard(modifier = Modifier.padding(20.dp).fillMaxWidth()) {
+            androidx.compose.material3.Text(message, color = HaiInk, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Black)
         }
     }
 }

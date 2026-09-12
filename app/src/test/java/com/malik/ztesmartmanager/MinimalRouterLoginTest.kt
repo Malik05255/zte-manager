@@ -6,33 +6,30 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MinimalRouterLoginTest {
-    private val source = File("src/main/java/com/malik/ztesmartmanager/ZteRouterLoginScreen.kt").readText()
+    private val source = File("src/main/java/com/malik/ztesmartmanager/HaiOneLogin.kt").readText()
 
     @Test
-    fun loginKeepsEssentialConnectionFlowInNewDesign() {
+    fun loginKeepsEssentialConnectionFlow() {
         assertTrue(source.contains("ZteRouterLoginScreen("))
         assertTrue(source.contains("ZTE Manager"))
-        assertTrue(source.contains("اتصال مباشر بالراوتر"))
-        assertTrue(source.contains("اتصل براوترك"))
         assertTrue(source.contains("عنوان الراوتر"))
-        assertTrue(source.contains("كلمة مرور الإدارة"))
-        assertTrue(source.contains("تذكر بيانات الدخول"))
-        assertTrue(source.contains("الاتصال بالراوتر"))
+        assertTrue(source.contains("كلمة المرور"))
+        assertTrue(source.contains("تذكرني"))
         assertTrue(source.contains("enabled = !busy && password.isNotBlank() && routerAddress.isNotBlank()"))
         assertTrue(source.contains("PasswordVisualTransformation()"))
         assertTrue(source.contains("Checkbox("))
+        assertTrue(source.contains("onClick = onConnect"))
     }
 
     @Test
-    fun loginIsReadableAndNeverCrowdsHeaderOnHonor200() {
+    fun loginIsResponsiveAndReadable() {
         assertTrue(source.contains("verticalScroll(rememberScrollState())"))
         assertTrue(source.contains("imePadding()"))
         assertTrue(source.contains("navigationBarsPadding()"))
         assertTrue(source.contains("statusBarsPadding()"))
-        assertTrue(source.contains("widthIn(max = 520.dp)"))
-        assertTrue(source.contains("heightIn(min = 56.dp)"))
-        assertTrue(source.contains("ZteCard("))
-        assertTrue(source.contains("ZteStatusPill("))
+        assertTrue(source.contains("widthIn(max = 540.dp)"))
+        assertTrue(source.contains("BoxWithConstraints"))
+        assertTrue(source.contains("fillMaxWidth().aspectRatio("))
 
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
         val tooTiny = regex.findAll(source)
@@ -43,12 +40,12 @@ class MinimalRouterLoginTest {
     }
 
     @Test
-    fun oldPortalDecorationIsGoneAndConnectionRemainsFunctional() {
+    fun loginHasNoOldExplanatoryDecoration() {
+        assertFalse(source.contains("اتصال مباشر بالراوتر"))
+        assertFalse(source.contains("أدخل عنوان الراوتر وكلمة مرور الإدارة"))
         assertFalse(source.contains("rememberInfiniteTransition"))
         assertFalse(source.contains("PortalHero("))
-        assertFalse(source.contains("PortalTag("))
         assertFalse(source.contains("graphicsLayer"))
-        assertTrue(source.contains("onClick = onConnect"))
         assertTrue(source.contains("OutlinedTextField("))
     }
 }
