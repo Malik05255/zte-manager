@@ -1,7 +1,6 @@
 package com.malik.ztesmartmanager
 
 import java.io.File
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,7 +10,11 @@ class MobileUiV2ReadabilityTest {
     fun productionDashboard_neverUsesTinyText() {
         val root = File("src/main/java/com/malik/ztesmartmanager")
         val files = root.listFiles()?.filter {
-            it.extension == "kt" && (it.name.startsWith("ZteManager") || it.name == "ZteRouterLoginScreen.kt")
+            it.extension == "kt" && (
+                it.name.startsWith("ZteManager") ||
+                    it.name == "ZteRouterLoginScreen.kt" ||
+                    it.name == "ZteReferenceChrome.kt"
+                )
         }.orEmpty()
         val regex = Regex("fontSize\\s*=\\s*([0-9]+(?:\\.[0-9]+)?)\\.sp")
         val tooTiny = files.flatMap { source ->
@@ -31,36 +34,45 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun home_isScrollableSingleColumnAndAvoidsPhoneGrids() {
+    fun home_matchesReferenceStructureAndStacksInsteadOfShrinking() {
         val home = File("src/main/java/com/malik/ztesmartmanager/ZteManagerHome.kt").readText()
         assertTrue(home.contains("LazyColumn("))
-        assertFalse(home.contains("BoxWithConstraints"))
-        assertFalse(home.contains("maxWidth >= 700.dp"))
-        assertTrue(home.contains("ZteHero(snapshot, qualityScore)"))
-        assertTrue(home.contains("ZtePlacementCoach("))
-        assertTrue(home.contains("ZteSpeedCard("))
-        assertTrue(home.contains("ZteModeCard("))
-        assertTrue(home.contains("ZteTowerMapCard("))
-        assertTrue(home.contains("ZteSignalSummary("))
+        assertTrue(home.contains("BoxWithConstraints"))
+        assertTrue(home.contains("maxWidth >= 700.dp"))
+        assertTrue(home.contains("ZteAdaptiveTwoColumn("))
+        assertTrue(home.contains("ZteAdaptiveThreeColumn("))
+        assertTrue(home.contains("if (wide)"))
+        assertTrue(home.contains("Column(Modifier.fillMaxWidth()"))
     }
 
     @Test
-    fun humanFirstVisualLanguage_isPresent() {
+    fun suppliedReferenceVisualHierarchy_isPresent() {
         val home = File("src/main/java/com/malik/ztesmartmanager/ZteManagerHome.kt").readText()
-        val theme = File("src/main/java/com/malik/ztesmartmanager/ZteManagerTheme.kt").readText()
         listOf(
-            "أفضل مكان للراوتر",
-            "بدون أرقام غامضة",
+            "حالة الشبكة",
             "اختبار السرعة",
-            "كل خيار في سطر مستقل",
-            "الخريطة والبرج",
-            "ملخص مفهوم بدل الأرقام الفنية",
-            "ثلاثة مسارات واضحة بدل شبكة أزرار مزدحمة"
-        ).forEach { phrase -> assertTrue("عنصر جديد مفقود: $phrase", home.contains(phrase)) }
-        assertTrue(theme.contains("statusBarsPadding()"))
-        assertTrue(theme.contains("navigationBarsPadding()"))
-        assertTrue(theme.contains("RoundedCornerShape(28.dp)"))
-        assertTrue(theme.contains("softWrap = false"))
+            "وضع الشبكة",
+            "الدمج النشط للترددات",
+            "أقرب برج شبكة",
+            "الترددات النشطة",
+            "قفل الترددات",
+            "أدوات التشخيص",
+            "مراقبة الإشارة المباشرة",
+            "أفضل مكان للراوتر"
+        ).forEach { phrase -> assertTrue("عنصر مرجعي مفقود: $phrase", home.contains(phrase)) }
+    }
+
+    @Test
+    fun phoneChrome_breaksIntoRowsRatherThanCrammingHeader() {
+        val chrome = File("src/main/java/com/malik/ztesmartmanager/ZteReferenceChrome.kt").readText()
+        val dashboard = File("src/main/java/com/malik/ztesmartmanager/ZteManagerDashboard.kt").readText()
+        assertTrue(chrome.contains("maxWidth < 560.dp"))
+        assertTrue(chrome.contains("statusBarsPadding()"))
+        assertTrue(chrome.contains("navigationBarsPadding()"))
+        assertTrue(chrome.contains("ZteConnectionCard"))
+        assertTrue(chrome.contains("ZteReferenceBottomBar"))
+        assertTrue(dashboard.contains("ZteReferenceTopBar("))
+        assertTrue(dashboard.contains("ZteReferenceBottomBar("))
     }
 
     @Test
@@ -79,7 +91,7 @@ class MobileUiV2ReadabilityTest {
     }
 
     @Test
-    fun networkControls_areExpandedVerticallyNotCompressed() {
+    fun networkControls_remainExpandedAndTruthFirst() {
         val network = File("src/main/java/com/malik/ztesmartmanager/ZteManagerNetwork.kt").readText()
         assertTrue(network.contains("كل وضع في سطر مستقل"))
         assertTrue(network.contains("غير متاح"))
