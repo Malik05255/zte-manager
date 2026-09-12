@@ -75,6 +75,7 @@ private fun HaiHero(snapshot: RouterSnapshot, qualityScore: Int) {
     val qualityColor = haiQualityColor(qualityScore)
     BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(30.dp)).background(HaiHeroBrush)) {
         val ratio = if (maxWidth < 520.dp) 0.82f else 1.65f
+        val networkFontSize = if (maxWidth < 390.dp) 42.sp else 52.sp
         Box(Modifier.fillMaxWidth().aspectRatio(ratio)) {
             HaiDigitalBackdrop(Modifier.fillMaxSize())
             Column(Modifier.fillMaxSize().padding(20.dp)) {
@@ -92,7 +93,7 @@ private fun HaiHero(snapshot: RouterSnapshot, qualityScore: Int) {
                     HaiRouterSilhouette(snapshot.model ?: "ZTE", Modifier.weight(0.36f).fillMaxHeight(0.62f))
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(0.64f)) {
-                        Text(haiNetworkLabel(snapshot), color = Color.White, fontSize = if (maxWidth < 390.dp) 42.sp else 52.sp, lineHeight = 56.sp, fontWeight = FontWeight.Black, maxLines = 1)
+                        Text(haiNetworkLabel(snapshot), color = Color.White, fontSize = networkFontSize, lineHeight = 56.sp, fontWeight = FontWeight.Black, maxLines = 1)
                         Spacer(Modifier.height(2.dp))
                         Text(if (snapshot.caActive) "${maxOf(snapshot.cells.size, 2)}CA" else "اتصال مباشر", color = HaiCyan, fontSize = 16.sp, fontWeight = FontWeight.Black, maxLines = 1)
                     }
