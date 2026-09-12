@@ -60,13 +60,7 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
     var linkSource by remember { mutableStateOf<GeoJsonSource?>(null) }
     var mapReady by remember { mutableStateOf(false) }
     var message by remember(verifiedTower) {
-        mutableStateOf(
-            if (verifiedTower == null) {
-                "سيظهر موقعك الحقيقي. الراوتر لم يرسل إحداثيات موثقة للبرج، لذلك لن نرسم خطًا وهميًا."
-            } else {
-                "إحداثيات البرج موثقة من بيانات الراوتر، وسيظهر خط الاتصال بعد تحديد موقعك."
-            }
-        )
+        mutableStateOf(if (verifiedTower == null) "موقع البرج غير موثق بعد." else "البرج موثق؛ حدّث موقعك لعرض الخط الحقيقي.")
     }
 
     val mapView = remember(context) {
@@ -87,30 +81,27 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
                     style.addSource(users)
                     style.addSource(towers)
                     style.addSource(links)
-
                     style.addLayer(
                         LineLayer(ZTE_LINK_LAYER, ZTE_LINK_SOURCE).withProperties(
-                            PropertyFactory.lineColor(AndroidColor.parseColor("#0B7CFF")),
-                            PropertyFactory.lineWidth(4.5f),
-                            PropertyFactory.lineOpacity(0.86f)
+                            PropertyFactory.lineColor(AndroidColor.parseColor("#1677FF")),
+                            PropertyFactory.lineWidth(5.0f),
+                            PropertyFactory.lineOpacity(0.90f)
                         )
                     )
                     style.addLayer(
                         CircleLayer(ZTE_USER_LAYER, ZTE_USER_SOURCE).withProperties(
-                            PropertyFactory.circleColor(AndroidColor.parseColor("#123A91")),
-                            PropertyFactory.circleRadius(9.0f),
+                            PropertyFactory.circleColor(AndroidColor.parseColor("#0D3E88")),
+                            PropertyFactory.circleRadius(9.5f),
                             PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
-                            PropertyFactory.circleStrokeWidth(3.5f),
-                            PropertyFactory.circleOpacity(1.0f)
+                            PropertyFactory.circleStrokeWidth(4.0f)
                         )
                     )
                     style.addLayer(
                         CircleLayer(ZTE_TOWER_LAYER, ZTE_TOWER_SOURCE).withProperties(
-                            PropertyFactory.circleColor(AndroidColor.parseColor("#19C5E8")),
-                            PropertyFactory.circleRadius(10.0f),
+                            PropertyFactory.circleColor(AndroidColor.parseColor("#24B8C9")),
+                            PropertyFactory.circleRadius(10.5f),
                             PropertyFactory.circleStrokeColor(AndroidColor.WHITE),
-                            PropertyFactory.circleStrokeWidth(3.5f),
-                            PropertyFactory.circleOpacity(1.0f)
+                            PropertyFactory.circleStrokeWidth(4.0f)
                         )
                     )
                     userSource = users
@@ -120,7 +111,7 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
                 }
                 readyMap.cameraPosition = CameraPosition.Builder()
                     .target(LatLng(23.8859, 45.0792))
-                    .zoom(4.2)
+                    .zoom(4.5)
                     .build()
             }
         }
@@ -139,14 +130,14 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
     fun locate() {
         val location = zteBestRecentLocation(context)
         if (location == null) {
-            message = "لم نحصل على موقع حديث من الهاتف. فعّل خدمات الموقع ثم جرّب مرة أخرى."
+            message = "لم نحصل على موقع حديث. فعّل الموقع ثم جرّب مرة أخرى."
             return
         }
         val users = userSource
         val towers = towerSource
         val links = linkSource
         if (!mapReady || users == null || towers == null || links == null) {
-            message = "الخريطة ما زالت تُجهز. أعد المحاولة بعد لحظة."
+            message = "الخريطة ما زالت تُجهز. جرّب بعد لحظة."
             return
         }
 
@@ -155,7 +146,6 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
         if (tower != null) {
             towers.setGeoJson(ztePointGeoJson(tower.latitude, tower.longitude))
             links.setGeoJson(zteLineGeoJson(location.latitude, location.longitude, tower.latitude, tower.longitude))
-
             val results = FloatArray(1)
             Location.distanceBetween(location.latitude, location.longitude, tower.latitude, tower.longitude, results)
             val distanceM = results.firstOrNull()?.toDouble() ?: 0.0
@@ -169,22 +159,21 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
                 else -> 8.0
             }
             map?.cameraPosition = CameraPosition.Builder().target(LatLng(midLat, midLon)).zoom(zoom).build()
-            message = "تم تحديد موقعك والبرج ورسم خط الاتصال من إحداثيات موثقة."
+            message = "موقعك والبرج والخط بينهما معروضة من بيانات موثقة."
         } else {
             towers.setGeoJson(ZTE_EMPTY_GEOJSON)
             links.setGeoJson(ZTE_EMPTY_GEOJSON)
             map?.cameraPosition = CameraPosition.Builder()
                 .target(LatLng(location.latitude, location.longitude))
-                .zoom(14.8)
+                .zoom(15.0)
                 .build()
-            message = "موقعك ظاهر الآن. موقع البرج غير متوفر من الراوتر؛ نعرض الحقيقة بدل خط تخميني."
+            message = "موقعك ظاهر. موقع البرج غير موثق، لذلك لن نرسم خطًا وهميًا."
         }
     }
 
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
-        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) locate() else message = "بدون إذن الموقع يمكن عرض الخريطة، لكن لا يمكن وضع موقعك عليها."
+        val granted = grants[Manifest.permission.ACCESS_FINE_LOCATION] == true || grants[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        if (granted) locate() else message = "اسمح بالموقع حتى نضعك على الخريطة."
     }
 
     val locationAllowed = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
@@ -194,48 +183,53 @@ internal fun ZteManagerMap(snapshot: RouterSnapshot, modifier: Modifier = Modifi
         if (mapReady && locationAllowed) locate()
     }
 
-    Box(modifier.clip(RoundedCornerShape(22.dp)).background(Color(0xFFE9F1FA))) {
+    Box(modifier.clip(RoundedCornerShape(24.dp)).background(Color(0xFFE9F1FA))) {
         AndroidView(factory = { mapView }, modifier = Modifier.fillMaxSize())
 
         Row(
-            Modifier.align(Alignment.TopStart)
+            Modifier
+                .align(Alignment.TopStart)
                 .padding(12.dp)
                 .clip(RoundedCornerShape(50))
                 .background(Color.White.copy(alpha = 0.96f))
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(Modifier.size(9.dp).clip(CircleShape).background(ZteDeepBlue))
-            Spacer(Modifier.width(6.dp))
-            Text("أنت", color = ZteInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(12.dp))
-            Box(Modifier.size(9.dp).clip(CircleShape).background(ZteCyan))
-            Spacer(Modifier.width(6.dp))
-            Text("البرج", color = ZteInk, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            Box(Modifier.size(10.dp).clip(CircleShape).background(ZteDeepBlue))
+            Spacer(Modifier.width(7.dp))
+            Text("موقعك", color = ZteInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            if (verifiedTower != null) {
+                Spacer(Modifier.width(12.dp))
+                Box(Modifier.size(10.dp).clip(CircleShape).background(ZteCyan))
+                Spacer(Modifier.width(7.dp))
+                Text("البرج", color = ZteInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
         }
 
         Column(
-            Modifier.align(Alignment.BottomCenter)
+            Modifier
+                .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .padding(12.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(Color.White.copy(alpha = 0.97f))
+                .clip(RoundedCornerShape(20.dp))
+                .background(Color.White.copy(alpha = 0.96f))
                 .padding(12.dp)
         ) {
-            Text(message, color = ZteInk, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(message, color = ZteInk, fontSize = 14.sp, lineHeight = 20.sp)
             Spacer(Modifier.height(9.dp))
             Box(
-                Modifier.fillMaxWidth()
-                    .clip(RoundedCornerShape(15.dp))
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
                     .background(ZteBlue)
                     .clickable {
                         if (locationAllowed) locate()
                         else launcher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
                     }
-                    .padding(vertical = 12.dp),
+                    .padding(vertical = 13.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Text(if (locationAllowed) "حدّث موقعي" else "اسمح بتحديد موقعي", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Black)
+                Text(if (locationAllowed) "حدّث موقعي" else "اسمح بتحديد موقعي", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Black)
             }
         }
     }
@@ -254,9 +248,7 @@ private fun zteVerifiedTowerCoordinate(snapshot: RouterSnapshot): ZteVerifiedTow
     for ((latKey, lonKey) in pairs) {
         val lat = snapshot.raw[latKey]?.trim()?.toDoubleOrNull() ?: continue
         val lon = snapshot.raw[lonKey]?.trim()?.toDoubleOrNull() ?: continue
-        if (lat in -90.0..90.0 && lon in -180.0..180.0 && !(lat == 0.0 && lon == 0.0)) {
-            return ZteVerifiedTowerCoordinate(lat, lon)
-        }
+        if (lat in -90.0..90.0 && lon in -180.0..180.0 && !(lat == 0.0 && lon == 0.0)) return ZteVerifiedTowerCoordinate(lat, lon)
     }
     return null
 }

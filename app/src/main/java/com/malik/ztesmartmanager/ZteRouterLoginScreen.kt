@@ -45,66 +45,58 @@ fun ZteRouterLoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(horizontal = 18.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Surface(shape = CircleShape, color = ZteSoftBlue) {
-                    Box(Modifier.size(50.dp), contentAlignment = Alignment.Center) {
-                        Text("ZTE", color = ZteBlue, fontSize = 14.sp, fontWeight = FontWeight.Black)
-                    }
+            Surface(shape = CircleShape, color = ZteSoftBlue) {
+                Box(Modifier.size(72.dp), contentAlignment = Alignment.Center) {
+                    Text("ZTE", color = ZteBlue, fontSize = 20.sp, fontWeight = FontWeight.Black)
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("ZTE Manager", color = ZteInk, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                    Text("بوابة الاتصال بالراوتر", color = ZteMuted, fontSize = 13.sp)
-                }
-                ZteStatusPill("محلي وآمن", true)
             }
+            Spacer(Modifier.height(12.dp))
+            Text("ZTE Manager", color = ZteInk, fontSize = 28.sp, lineHeight = 34.sp, fontWeight = FontWeight.Black)
+            Spacer(Modifier.height(4.dp))
+            Text("اتصال مباشر بالراوتر", color = ZteMuted, fontSize = 15.sp, lineHeight = 21.sp)
+            Spacer(Modifier.height(12.dp))
+            ZteStatusPill("محلي وآمن", true)
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(22.dp))
 
             ZteCard(
                 modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp),
                 contentPadding = PaddingValues(20.dp)
             ) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("اتصل براوترك", color = ZteInk, fontSize = 24.sp, fontWeight = FontWeight.Black)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "أدخل عنوان الراوتر وكلمة مرور الإدارة. البيانات تبقى ضمن جلسة الاتصال المحلية.",
-                            color = ZteMuted,
-                            fontSize = 14.sp,
-                            lineHeight = 20.sp
-                        )
-                    }
-                    Spacer(Modifier.width(14.dp))
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Surface(
-                        modifier = Modifier.width(86.dp).height(126.dp),
-                        shape = RoundedCornerShape(24.dp),
+                        modifier = Modifier.width(92.dp).height(132.dp),
+                        shape = RoundedCornerShape(26.dp),
                         color = ZteSoftBlue,
                         shadowElevation = 4.dp
                     ) {
                         Column(
-                            Modifier.padding(vertical = 14.dp),
+                            Modifier.padding(vertical = 15.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Box(Modifier.width(40.dp).height(4.dp).clip(CircleShape).background(ZteInk))
-                            Text("ZTE", color = ZteMuted, fontSize = 17.sp, fontWeight = FontWeight.Black)
-                            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Box(Modifier.width(42.dp).height(5.dp).clip(CircleShape).background(ZteInk))
+                            Text("ZTE", color = ZteMuted, fontSize = 19.sp, fontWeight = FontWeight.Black)
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 repeat(4) { index ->
-                                    Box(
-                                        Modifier
-                                            .size(7.dp)
-                                            .clip(CircleShape)
-                                            .background(if (index < 3) ZteGreen else ZteBlue)
-                                    )
+                                    Box(Modifier.size(7.dp).clip(CircleShape).background(if (index < 3) ZteGreen else ZteBlue))
                                 }
                             }
                         }
                     }
+                    Spacer(Modifier.height(16.dp))
+                    Text("اتصل براوترك", color = ZteInk, fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "أدخل عنوان الراوتر وكلمة مرور الإدارة. لا نعرض بيانات وهمية إذا لم يرد الراوتر بالمعلومة.",
+                        color = ZteMuted,
+                        fontSize = 15.sp,
+                        lineHeight = 22.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
 
                 Spacer(Modifier.height(22.dp))
@@ -113,8 +105,8 @@ fun ZteRouterLoginScreen(
                     value = routerAddress,
                     onValueChange = onRouterAddressChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("عنوان الراوتر", fontSize = 14.sp) },
-                    supportingText = { Text("مثال: 192.168.0.1", fontSize = 12.sp) },
+                    label = { Text("عنوان الراوتر", fontSize = 15.sp) },
+                    supportingText = { Text("مثال: 192.168.0.1", fontSize = 14.sp) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     singleLine = true,
                     enabled = !busy,
@@ -130,13 +122,13 @@ fun ZteRouterLoginScreen(
                     )
                 )
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
 
                 OutlinedTextField(
                     value = password,
                     onValueChange = onPasswordChange,
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("كلمة مرور الإدارة", fontSize = 14.sp) },
+                    label = { Text("كلمة مرور الإدارة", fontSize = 15.sp) },
                     visualTransformation = PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true,
@@ -153,7 +145,7 @@ fun ZteRouterLoginScreen(
                     )
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
 
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(
@@ -162,18 +154,19 @@ fun ZteRouterLoginScreen(
                         enabled = !busy,
                         colors = CheckboxDefaults.colors(checkedColor = ZteBlue, uncheckedColor = ZteMuted)
                     )
-                    Column {
-                        Text("تذكر بيانات الدخول", color = ZteInk, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                        Text("تُحفظ مشفرة على هذا الجهاز", color = ZteMuted, fontSize = 12.sp)
+                    Spacer(Modifier.width(6.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("تذكر بيانات الدخول", color = ZteInk, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                        Text("تُحفظ مشفرة على هذا الجهاز", color = ZteMuted, fontSize = 14.sp, lineHeight = 20.sp)
                     }
                 }
 
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(16.dp))
 
                 Button(
                     onClick = onConnect,
                     enabled = !busy && password.isNotBlank() && routerAddress.isNotBlank(),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ZteBlue,
@@ -186,30 +179,21 @@ fun ZteRouterLoginScreen(
                 if (status.isNotBlank() && status != "غير متصل" && status != "جاري الاتصال...") {
                     Spacer(Modifier.height(14.dp))
                     Surface(
-                        shape = RoundedCornerShape(17.dp),
+                        shape = RoundedCornerShape(18.dp),
                         color = if (isError) ZteRed.copy(alpha = 0.09f) else ZteSoftBlue
                     ) {
                         Text(
                             status,
                             color = if (isError) ZteRed else ZteInk,
-                            fontSize = 13.sp,
-                            lineHeight = 19.sp,
+                            fontSize = 14.sp,
+                            lineHeight = 21.sp,
                             textAlign = TextAlign.Start,
-                            modifier = Modifier.fillMaxWidth().padding(14.dp)
+                            modifier = Modifier.fillMaxWidth().padding(15.dp)
                         )
                     }
                 }
             }
 
-            Spacer(Modifier.height(14.dp))
-            Text(
-                "بعد الاتصال ستظهر القياسات التي يعيدها الراوتر فعليًا، ولن تُعرض بيانات تخمينية عند غياب الدليل.",
-                color = ZteMuted,
-                fontSize = 13.sp,
-                lineHeight = 19.sp,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().widthIn(max = 520.dp)
-            )
             Spacer(Modifier.height(18.dp))
         }
     }
