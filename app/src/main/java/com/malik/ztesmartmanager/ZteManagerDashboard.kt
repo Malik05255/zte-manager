@@ -92,17 +92,19 @@ fun ZteManagerDashboard(
             modifier = Modifier.fillMaxSize(),
             containerColor = ZteBg,
             topBar = {
-                ZteTopBar(
+                ZteReferenceTopBar(
                     connected = snapshot != null,
-                    title = when (screen) {
+                    sectionTitle = when (screen) {
                         ZteScreen.HOME -> "ZTE Manager"
                         ZteScreen.NETWORK -> "الشبكة والترددات"
                         ZteScreen.TOOLS -> "الأدوات الذكية"
                         ZteScreen.MORE -> "المزيد"
-                    }
+                    },
+                    onMenu = { screen = ZteScreen.MORE },
+                    onSettings = { screen = ZteScreen.MORE }
                 )
             },
-            bottomBar = { ZteBottomBar(screen) { screen = it } }
+            bottomBar = { ZteReferenceBottomBar(screen) { screen = it } }
         ) { padding ->
             Box(Modifier.fillMaxSize().background(ZteBg).padding(padding)) {
                 if (snapshot == null) {
