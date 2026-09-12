@@ -9,6 +9,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.malik.ztesmartmanager.core.diagnostics.ConnectionStabilityReport
 import com.malik.ztesmartmanager.core.diagnostics.SafeTelemetrySample
